@@ -1,175 +1,184 @@
-"use client";
-import { useState, useEffect } from "react";
-import Link from "next/link";
+'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Navbar.jsx
-// Usage: import Navbar from "@/components/Navbar";
-//        <Navbar />
-// ─────────────────────────────────────────────────────────────────────────────
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { AppBar, Toolbar, Typography, Button, Box } from "@mui/material";
+import { LogIn, UserPlus } from "lucide-react";
 
-const NAV_LINKS = [
-  { name: "Home", href: "/" },
-  { name: "Explore", href: "/explore" },
-  { name: "About", href: "/about" },
-  { name: "Contact", href: "/contact" },
-];
+const glassSx = {
+  backgroundColor: "rgba(255,255,255,0.1)",
+  backdropFilter: "blur(20px)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+  borderRadius: 3
+};
+
+const navyGlassSx = {
+  background: "linear-gradient(145deg, #0f172a, #1e3a8a)",
+  backdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  color: "white"
+};
+
 
 export default function Navbar() {
-  const [scrolled, setScrolled]   = useState(false);
-  const [menuOpen, setMenuOpen]   = useState(false);
-  const [hovered, setHovered]     = useState(null);
-  const [btnHover, setBtnHover]   = useState(null);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
-    <>
-      {/* ── Global font import — add once per project in layout.jsx instead ── */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
-        @keyframes nav-drop { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-        .nav-root { animation: nav-drop 0.5s cubic-bezier(.34,1.56,.64,1) both; }
-      `}</style>
-
-      <nav
-        className="nav-root"
-        style={{
-          position:       "fixed",
-          top:            0,
-          left:           0,
-          right:          0,
-          zIndex:         100,
-          padding:        scrolled ? "12px 48px" : "22px 48px",
-          background:     scrolled ? "rgba(6,6,6,0.96)" : "transparent",
-          backdropFilter: scrolled ? "blur(24px)" : "none",
-          WebkitBackdropFilter: scrolled ? "blur(24px)" : "none",
-          borderBottom:   scrolled ? "1px solid rgba(255,255,255,0.07)" : "none",
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "space-between",
-          transition:     "padding 0.4s ease, background 0.4s ease, border-bottom 0.4s ease",
+    <motion.div initial={{ y: -100 }} animate={{ y: 0 }}>
+      <AppBar
+        position="fixed"
+        sx={{
+          backgroundColor: scrolled ? "rgba(93, 90, 90, 0.8)" : "rgba(255,255,255,0.3)",
+          boxShadow: scrolled ? 4 : 1,
+          transition: "all 0.3s",
+          width: "100%",
+          left: 0,
+          right: 0,
+          px: { xs: 0, md: 6 },
         }}
       >
-        {/* ── Logo ── */}
-        <Link href="/" style={{ display:"flex", alignItems:"center", gap:10, textDecoration:"none" }}>
-          <div style={{
-            width: 34, height: 34,
-            background: "#fff",
-            borderRadius: 9,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: scrolled ? "0 0 0 rgba(255,255,255,0)" : "0 0 18px rgba(255,255,255,0.15)",
-            transition: "box-shadow 0.4s",
-          }}>
-            <span style={{ color:"#000", fontWeight:900, fontSize:17, fontFamily:"Georgia, serif" }}>B</span>
-          </div>
-          <span style={{
-            color: "#fff",
-            fontWeight: 800,
-            fontSize: 17,
-            fontFamily: "'Barlow Condensed', sans-serif",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}>
-            BUILD
-            <span style={{ color:"rgba(255,255,255,0.35)" }}>MY</span>
-            RIDE
-          </span>
-        </Link>
-
-        {/* ── Desktop nav links ── */}
-        <div style={{ display:"flex", gap:36, alignItems:"center" }}>
-          {NAV_LINKS.map(({ name, href }) => (
-            <Link
-              key={name}
-              href={href}
-              onMouseEnter={() => setHovered(name)}
-              onMouseLeave={() => setHovered(null)}
-              style={{
-                color:          hovered === name ? "#fff" : "rgba(255,255,255,0.5)",
-                fontSize:       12,
-                fontFamily:     "'Barlow Condensed', sans-serif",
-                fontWeight:     700,
-                letterSpacing:  "0.12em",
-                textTransform:  "uppercase",
-                textDecoration: "none",
-                transition:     "color 0.2s",
-                position:       "relative",
+        <Toolbar
+          sx={{
+            minHeight: { xs: 64, md: 90 },
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            width: "100%",
+            px: { xs: 1, md: 0 },
+          }}
+        >
+          {/* Main container for nav sections */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              maxWidth: 1500,
+              mx: "auto",
+              gap: { xs: 1, md: 4 },
+            }}
+          >
+            {/* Left: Logo */}
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: "bold",
+                background: "linear-gradient(to right, #484e5f, #3b82f6)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                letterSpacing: 2,
+                px: 2,
               }}
             >
-              {name}
-              <span style={{
-                position:   "absolute",
-                bottom:     -4,
-                left:       "50%",
-                transform:  "translateX(-50%)",
-                width:      hovered === name ? 4 : 0,
-                height:     4,
-                borderRadius: "50%",
-                background: "#fff",
-                transition: "width 0.2s ease",
-              }}/>
-            </Link>
-          ))}
-        </div>
+              BUILDMYRIDE
+            </Typography>
 
-        {/* ── CTA Buttons ── */}
-        <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-          {/* Log in */}
-          <button
-            onClick={() => window.location.href = "/login"}
-            onMouseEnter={() => setBtnHover("login")}
-            onMouseLeave={() => setBtnHover(null)}
-            style={{
-              padding:        "9px 26px",
-              fontSize:       11,
-              fontFamily:     "'Barlow Condensed', sans-serif",
-              fontWeight:     700,
-              letterSpacing:  "0.12em",
-              textTransform:  "uppercase",
-              background:     "transparent",
-              color:          btnHover === "login" ? "#fff" : "rgba(255,255,255,0.7)",
-              border:         `1.5px solid ${btnHover === "login" ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.18)"}`,
-              borderRadius:   8,
-              cursor:         "pointer",
-              transition:     "all 0.22s",
-            }}
-          >
-            Log in
-          </button>
+            {/* Center: Nav links with glass effect */}
+            <Box
+              sx={{
+                flex: 1,
+                display: { xs: "none", md: "flex" },
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 4,
+                py: 1.5,
+                px: 4,
+                borderRadius: 6,
+                ...glassSx,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                border: "1.5px solid rgba(255,255,255,0.25)",
+                minWidth: 350,
+                maxWidth: 600,
+                mx: 2,
+              }}
+            >
+              {["Home", "About", "Contact", "Explore"].map((item) => (
+                <Typography
+                  key={item}
+                  component="a"
+                  href={`#${item.toLowerCase()}`}
+                  sx={{
+                    color: "common.black",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    fontSize: 18,
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 2,
+                    transition: "all 0.2s",
+                    "&:hover": {
+                      transform: "scale(1.1) translateY(-2px)",
+                      background: "rgba(106, 95, 95, 0.3)",
+                      boxShadow: "0 2px 8px rgba(30,58,138,0.08)",
+                    },
+                  }}
+                >
+                  {item}
+                </Typography>
+              ))}
+            </Box>
 
-          {/* Sign up */}
-          <button
-            onClick={() => window.location.href = "/signup"}
-            onMouseEnter={() => setBtnHover("signup")}
-            onMouseLeave={() => setBtnHover(null)}
-            style={{
-              padding:        "9px 26px",
-              fontSize:       11,
-              fontFamily:     "'Barlow Condensed', sans-serif",
-              fontWeight:     700,
-              letterSpacing:  "0.12em",
-              textTransform:  "uppercase",
-              background:     "#fff",
-              color:          "#000",
-              border:         "none",
-              borderRadius:   8,
-              cursor:         "pointer",
-              boxShadow:      btnHover === "signup"
-                ? "0 8px 32px rgba(255,255,255,0.32)"
-                : "0 4px 20px rgba(255,255,255,0.2)",
-              transform:      btnHover === "signup" ? "translateY(-2px)" : "none",
-              transition:     "all 0.22s",
-            }}
-          >
-            Sign up
-          </button>
-        </div>
-      </nav>
-    </>
+            {/* Right: Login/Sigssnup with glass effect */}
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                alignItems: "center",
+                px: 2,
+                py: 1.5,
+                borderRadius: 6,
+                ...glassSx,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                border: "1.5px solid rgba(255,255,255,0.25)",
+                minWidth: 220,
+                justifyContent: "flex-end",
+              }}
+            >
+              <Button
+                sx={{
+                  background: "rgba(255,255,255,0.25)",
+                  color: "#1e293b",
+                  borderRadius: 50,
+                  px: 3,
+                  fontWeight: 600,
+                  boxShadow: "none",
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    background: "rgba(255,255,255,0.4)",
+                    boxShadow: "0 2px 8px rgba(30,58,138,0.08)",
+                  },
+                }}
+                startIcon={<LogIn size={20} />}
+              >
+                Login
+              </Button>
+              <Button
+                sx={{
+                  ...navyGlassSx,
+                  borderRadius: 50,
+                  px: 3,
+                  fontWeight: 600,
+                  boxShadow: 4,
+                  transition: "all 0.2s",
+                  "&:hover": { boxShadow: 8 },
+                }}
+                startIcon={<UserPlus size={20} />}
+              >
+                Sign Up
+              </Button>
+            </Box>
+          </Box>
+        </Toolbar>
+      </AppBar>
+    </motion.div>
   );
 }
+
