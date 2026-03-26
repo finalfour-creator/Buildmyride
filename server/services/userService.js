@@ -1,4 +1,5 @@
 import config from "../config/index.js";
+import User from "../models/User.js";
 
 /**
  * Get user by email. Placeholder: reads from env. Replace with DB lookup when ready.
@@ -19,3 +20,28 @@ export async function getUserByEmail(email) {
     passwordHash: placeholderPasswordHash,
   };
 }
+
+// CREATE
+export const createUser = async (data) => {
+  return await User.create(data);
+};
+
+// READ (all users)
+export const getUsers = async () => {
+  return await User.find();
+};
+
+// READ (single user)
+export const getUserById = async (id) => {
+  return await User.findById(id);
+};
+
+// UPDATE
+export const updateUser = async (id, data) => {
+  return await User.findByIdAndUpdate(id, data, { new: true });
+};
+
+// DELETE
+export const deleteUser = async (id) => {
+  return await User.findByIdAndDelete(id);
+};
