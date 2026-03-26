@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import config from "./config/index.js";
 import authRoutes from "./routes/authRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
 
@@ -30,5 +31,8 @@ app.use(limiter);
 app.use("/auth", authRoutes);
 
 app.use(errorHandler);
+
+app.use("/api/users", userRoutes);
+
 
 export default app;
