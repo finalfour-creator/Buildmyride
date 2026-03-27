@@ -1,5 +1,7 @@
-import { Login } from "@/components/features/auth/Login";
+import LoginPage from "@/feature/auth/login.jsx";
 
-export default function LoginPage() {
-  return <Login />;
+console.log("LoginPage:", LoginPage);
+
+export default function Page() {
+  return <LoginPage />;
 }
