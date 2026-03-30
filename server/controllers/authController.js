@@ -9,6 +9,7 @@ import { loginSchema } from "../validators/authSchemas.js";
  * @param {import("express").NextFunction} next
  */
 export async function login(req, res, next) {
+  console.log("LOGIN BODY:", req.body);
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     return next(createError(400, "Invalid email or password"));
