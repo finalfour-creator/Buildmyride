@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import config from "../config/index.js";
 import { getUserByEmail } from "./userService.js";
+import User from "../models/User.js";
 
 const SALT_ROUNDS = 12;
 
@@ -11,15 +12,33 @@ const SALT_ROUNDS = 12;
  * @param {string} password - Plain password
  * @returns {Promise<{ id: string; email: string } | null>} User without password, or null
  */
-export async function validateCredentials(email, password) {
-  const user = await getUserByEmail(email);
+// export async function validateCredentials(email, password) {
+//   const user = await getUserByEmail(email);
+//   if (!user) return null;
+
+//   const match = await bcrypt.compare(password, user.passwordHash);
+//   if (!match) return null;
+
+//   return { id: user.id, email: user.email };
+// }
+
+export const validateCredentials = async (email, password) => {
+
+  console.log("Searching email:", email);
+
+  const user = await User.findOne({ email });
+
+  console.log("FOUND USER:", user);
+
   if (!user) return null;
 
-  const match = await bcrypt.compare(password, user.passwordHash);
-  if (!match) return null;
+  console.log("DB Password:", user.password);
+  console.log("Entered Password:", password);
 
-  return { id: user.id, email: user.email };
-}
+  if (user.password !== password) return null;
+
+  return user;
+};
 
 /**
  * Create a JWT for the given payload.
