@@ -1,86 +1,197 @@
 "use client";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Divider from "@mui/material/Divider";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
 
-/**
- * Login form: email/password, signIn('credentials'), redirect on success.
- */
-export function Login() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+    import Input from "./components/Input";
+    import PrimaryButton from "./components/PrimaryButton";
+    import GoogleIcon from "./components/GoogleIcon";
+    
+
+
+
+const ACCENT = "#22a7f0";
+const SLIDING_BG = "linear-gradient(135deg, #22a7f0 0%, #1a1a1d 100%)";
+
+export default function LoginPage() {
+  const [isToggled, setIsToggled] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (result?.error) {
-      setError("Invalid email or password");
-      return;
-    }
-    router.push(callbackUrl);
-    router.refresh();
-  }
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 150);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border p-6 shadow-sm"
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundImage:
+          "linear-gradient(rgba(0,0,0,0.6),rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=1966&auto=format&fit=crop')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      <Box
+        sx={{
+          width: "85%",
+          maxWidth: 1000,
+          height: "65vh",
+          borderRadius: 6,
+          background: "rgba(26,26,29,0.15)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          boxShadow: "0 40px 100px rgba(0,0,0,0.5)",
+          position: "relative",
+          display: "flex",
+          overflow: "hidden",
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(30px)",
+          transition: "all 0.8s cubic-bezier(0.23, 1, 0.32, 1)",
+        }}
       >
-        <h1 className="text-xl font-semibold">Sign in</h1>
-        {error && (
-          <p className="rounded bg-red-100 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
+        {/* ── Sign In Panel ── */}
+        <Box
+          sx={{
+            width: "50%",
+            p: "60px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            opacity: isToggled ? 0 : 1,
+            pointerEvents: isToggled ? "none" : "all",
+            transition: "opacity 0.6s",
+          }}
+        >
+          <Typography variant="h4" fontWeight={700} mb={3} color="#fff">
+            Sign In
+          </Typography>
+
+          <Input
+            label="Email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="admin@example.com"
           />
-        </div>
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm font-medium">
-            Password
-          </label>
-          <input
-            id="password"
+          <Input
+            label="Password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  size="small"
+                  sx={{ color: "#aaa", "&.Mui-checked": { color: ACCENT }, p: 0.5 }}
+                />
+              }
+              label={<Typography sx={{ fontSize: 13, color: "#aaa" }}>Remember me</Typography>}
+            />
+            <Link href="#" style={{ color: ACCENT, textDecoration: "none", fontSize: 13, fontWeight: 500 }}>
+              Forgot Password?
+            </Link>
+          </Box>
+
+          <PrimaryButton onClick={() => console.log("Login")}>Login</PrimaryButton>
+
+          <Divider sx={{ my: 2, "&::before, &::after": { borderColor: "rgba(255,255,255,0.1)" } }}>
+            <Typography sx={{ fontSize: 13, color: "#888", px: 1 }}>or</Typography>
+          </Divider>
+
+          <Button
+            fullWidth
+            startIcon={<GoogleIcon />}
+            sx={{
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 2,
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: 13,
+              py: 1.5,
+              "&:hover": { background: "rgba(255,255,255,0.1)" },
+            }}
+          >
+            Continue with Google
+          </Button>
+        </Box>
+
+        {/* ── Create Account Panel ── */}
+        <Box
+          sx={{
+            width: "50%",
+            p: "60px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            opacity: isToggled ? 1 : 0,
+            pointerEvents: isToggled ? "all" : "none",
+            transition: "opacity 0.6s",
+          }}
         >
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-    </div>
+          <Typography variant="h4" fontWeight={700} mb={3} color="#fff">
+            Create Account
+          </Typography>
+          <Input label="Full Name" />
+          <Input label="Email" type="email" />
+          <Input label="Password" type="password" />
+          <PrimaryButton onClick={() => console.log("Register")}>Register</PrimaryButton>
+        </Box>
+
+        {/* ── Sliding Panel ── */}
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            left: isToggled ? "0%" : "50%",
+            width: "50%",
+            height: "100%",
+            zIndex: 10,
+            transition: "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+            background: SLIDING_BG,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            px: "60px",
+            textAlign: "center",
+            color: "#fff",
+            boxShadow: isToggled
+              ? "20px 0 50px rgba(34,167,240,0.3)"
+              : "-20px 0 50px rgba(34,167,240,0.3)",
+          }}
+        >
+          <Typography variant="h4" fontWeight={700} mb={2}>
+            {isToggled ? "Already a Member?" : "Hello, Friend!"}
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: "rgba(255,255,255,0.8)", mb: 4 }}>
+            {isToggled
+              ? "To keep connected with us please login with your personal info"
+              : "Enter your personal details and start your journey with us"}
+          </Typography>
+          <PrimaryButton inverted onClick={() => setIsToggled(!isToggled)}>
+            {isToggled ? "SIGN IN" : "SIGN UP"}
+          </PrimaryButton>
+        </Box>
+      </Box>
+    </Box>
   );
 }
