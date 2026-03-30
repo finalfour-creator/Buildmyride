@@ -1,3 +1,4 @@
+"use client"
 import LoginPage from "@/feature/auth/login.jsx";
 
 console.log("LoginPage:", LoginPage);
