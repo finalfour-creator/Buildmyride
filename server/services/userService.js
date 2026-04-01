@@ -6,42 +6,54 @@ import User from "../models/User.js";
  * @param {string} email - User email
  * @returns {Promise<{ id: string; email: string; passwordHash: string } | null>}
  */
-export async function getUserByEmail(email) {
-  const placeholderEmail = config.AUTH_PLACEHOLDER_EMAIL;
-  const placeholderPasswordHash = config.AUTH_PLACEHOLDER_PASSWORD_HASH;
+// export async function getUserByEmail(email) {
+//   const placeholderEmail = config.AUTH_PLACEHOLDER_EMAIL;
+//   const placeholderPasswordHash = config.AUTH_PLACEHOLDER_PASSWORD_HASH;
 
-  if (!placeholderPasswordHash || email !== placeholderEmail) {
-    return null;
-  }
+//   if (!placeholderPasswordHash || email !== placeholderEmail) {
+//     return null;
+//   }
+
+//   return {
+//     id: "placeholder-user-id",
+//     email: placeholderEmail,
+//     passwordHash: placeholderPasswordHash,
+//   };
+// }
+
+export async function getUserByEmail(email) {
+  const user = await User.findOne({ email });
+
+  if (!user) return null;
 
   return {
-    id: "placeholder-user-id",
-    email: placeholderEmail,
-    passwordHash: placeholderPasswordHash,
+    id: user._id.toString(),
+    email: user.email,
+    passwordHash: user.password, // assuming plain for now
   };
 }
 
 // CREATE
-export const createUser = async (data) => {
-  return await User.create(data);
-};
+// export const createUser = async (data) => {
+//   return await User.create(data);
+// };
 
-// READ (all users)
-export const getUsers = async () => {
-  return await User.find();
-};
+// // READ (all users)
+// export const getUsers = async () => {
+//   return await User.find();
+// };
 
-// READ (single user)
-export const getUserById = async (id) => {
-  return await User.findById(id);
-};
+// // READ (single user)
+// export const getUserById = async (id) => {
+//   return await User.findById(id);
+// };
 
-// UPDATE
-export const updateUser = async (id, data) => {
-  return await User.findByIdAndUpdate(id, data, { new: true });
-};
+// // UPDATE
+// export const updateUser = async (id, data) => {
+//   return await User.findByIdAndUpdate(id, data, { new: true });
+// };
 
-// DELETE
-export const deleteUser = async (id) => {
-  return await User.findByIdAndDelete(id);
-};
+// // DELETE
+// export const deleteUser = async (id) => {
+//   return await User.findByIdAndDelete(id);
+// };

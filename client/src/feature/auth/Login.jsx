@@ -7,14 +7,12 @@ import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Divider from "@mui/material/Divider";
+import { signIn } from "next-auth/react";
 
 
     import Input from "./components/Input";
     import PrimaryButton from "./components/PrimaryButton";
     import GoogleIcon from "./components/GoogleIcon";
-    
-
-
 
 const ACCENT = "#22a7f0";
 const SLIDING_BG = "linear-gradient(135deg, #22a7f0 0%, #1a1a1d 100%)";
@@ -25,6 +23,48 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+
+  const handleRegister = async () => {
+  try {
+    const res = await fetch("http://localhost:5000/api/auth/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        email: regEmail,
+        password: regPassword,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || "Registration failed ❌");
+    } else {
+      alert("Registration Successful ✅");
+    }
+
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+  const handleLogin = async () => {
+           const result = await signIn("credentials", {
+            email,
+            password,
+            redirect: false,
+          });
+           if (result?.error) {
+            alert("Invalid email or password ❌");
+          } else {
+            alert("Login Successful ✅");
+            }};
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 150);
@@ -110,7 +150,7 @@ export default function LoginPage() {
             </Link>
           </Box>
 
-          <PrimaryButton onClick={() => console.log("Login")}>Login</PrimaryButton>
+          <PrimaryButton onClick={handleLogin}>Login</PrimaryButton>
 
           <Divider sx={{ my: 2, "&::before, &::after": { borderColor: "rgba(255,255,255,0.1)" } }}>
             <Typography sx={{ fontSize: 13, color: "#888", px: 1 }}>or</Typography>
@@ -150,10 +190,16 @@ export default function LoginPage() {
           <Typography variant="h4" fontWeight={700} mb={3} color="#fff">
             Create Account
           </Typography>
-          <Input label="Full Name" />
-          <Input label="Email" type="email" />
-          <Input label="Password" type="password" />
-          <PrimaryButton onClick={() => console.log("Register")}>Register</PrimaryButton>
+          <Input label="Full Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)} />
+          <Input label="Email" type="email" 
+          value={regEmail} 
+          onChange={(e) => setRegEmail(e.target.value)} />
+          <Input label="Password" type="password" 
+          value={regPassword} 
+          onChange={(e) => setRegPassword(e.target.value)} />
+          <PrimaryButton onClick={handleRegister}>Register</PrimaryButton>
         </Box>
 
         {/* ── Sliding Panel ── */}

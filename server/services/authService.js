@@ -4,6 +4,7 @@ import config from "../config/index.js";
 import { getUserByEmail } from "./userService.js";
 import User from "../models/User.js";
 
+
 const SALT_ROUNDS = 12;
 
 /**
@@ -22,20 +23,70 @@ const SALT_ROUNDS = 12;
 //   return { id: user.id, email: user.email };
 // }
 
+// export const validateCredentials = async (email, password) => {
+
+//   console.log("Searching email:", email);
+
+//   const user = await User.findOne({ email });
+
+//   console.log("FOUND USER:", user);
+
+//   if (!user) return null;
+
+//   console.log("DB Password:", user.password);
+//   console.log("Entered Password:", password);
+
+//   if (user.password !== password) return null;
+
+//   return user;
+// };
+
 export const validateCredentials = async (email, password) => {
 
-  console.log("Searching email:", email);
+  console.log("Validating:", email);
 
-  const user = await User.findOne({ email });
+  const user = await getUserByEmail(email);
 
-  console.log("FOUND USER:", user);
+  if (!user) {
+    console.log("User not found");
+    return null;
+  }
 
-  if (!user) return null;
+  console.log("User found:", user.email);
 
-  console.log("DB Password:", user.password);
-  console.log("Entered Password:", password);
+  // 🔴 TEMP (since you are using plain password)
+  // const match = password === user.passwordHash;
 
-  if (user.password !== password) return null;
+  // ✅ FUTURE (when using bcrypt)
+  const match = await bcrypt.compare(password, user.passwordHash);
+
+  if (!match) {
+    console.log("Password mismatch");
+    return null;
+  }
+
+  // ✅ RETURN ONLY SAFE DATA
+  return {
+    id: user.id,
+    email: user.email,
+  };
+};
+
+export const createUser = async (name, email, password) => {
+
+  console.log("RAW PASSWORD:", password);
+  const existingUser = await User.findOne({ email });
+  if (existingUser) return null;
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  console.log("HASHED:", hashedPassword);
+
+  const user = await User.create({
+    name,
+    email,
+    password: hashedPassword, // later we hash this
+  });
 
   return user;
 };
