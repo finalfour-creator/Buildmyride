@@ -63,3 +63,11 @@ export default function Home() {
     </div>
   );
 }
+
+
+// "use client";
+// import LandingPage from "@/feature/landing/components/LandingPage";
+
+// export default function Home() {
+//   return <LandingPage />;
+// }
