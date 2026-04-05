@@ -1,5 +1,6 @@
-import { Login } from "@/components/features/auth/Login";
+"use client"
+import LoginPage from "../../feature/auth/Login.jsx";
 
-export default function LoginPage() {
-  return <Login />;
+export default function Page() {
+  return <LoginPage />;
 }

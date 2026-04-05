@@ -1,6 +1,6 @@
-// import { Geist, Geist_Mono } from "next/font/google";
-// import { SessionProvider } from "@/components/providers/SessionProvider";
-// import "./globals.css";
+import { Geist, Geist_Mono } from "next/font/google";
+import { SessionProvider } from "../providers/SessionProvider";
+import "./globals.css";
 
 // const geistSans = Geist({
 //   variable: "--font-geist-sans",
@@ -82,7 +82,7 @@ const theme = createTheme({
   },
 });
 
-export default function RootLayout({ children }) {
+export default function RootLayout({children}) {
   return (
     <html lang="en">
       <body>
