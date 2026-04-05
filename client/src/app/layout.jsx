@@ -1,3 +1,5 @@
+"use client";
+
 import { Geist, Geist_Mono } from "next/font/google";
 import { SessionProvider } from "../providers/SessionProvider";
 import "./globals.css";
@@ -30,7 +32,7 @@ import "./globals.css";
 // }
 
 
-"use client";
+
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 
