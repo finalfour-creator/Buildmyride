@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Box } from "@mui/material";
-import Navbar from "@/components/layout/Navbar";
+import Navbar from "@/components/layout/LandingNav"
 import Footer from "@/components/layout/Footer";
 import IntroAnimation from "./IntroAnimation";
 import HeroSection from "./HeroSection";
