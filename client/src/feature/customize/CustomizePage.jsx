@@ -1,12 +1,10 @@
-
-
 "use client";
 import { useState } from "react";
 import { Box, Typography, Button } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
-import PartSelector from "@/feature/customize/components/PartSelector";
-import OptionsPanel from "@/feature/customize/components/OptionsPanel";
-import AiChatbox from "@/feature/customize/components/AiChatbox";
+import PartSelector from "./components/PartSelector";
+import OptionsPanel from "./components/OptionsPanel";
+import AiChatbox from "./components/AiChatbox";
 
 const parts = [
   { id: "body", name: "BODY PAINT", icon: "●" },
@@ -60,7 +58,7 @@ export default function CustomizePage() {
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        backgroundImage: "url('/images/garage1.jpg')",
+        backgroundImage: "url('/images/garage2.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center 20%",
         backgroundRepeat: "no-repeat",

@@ -8,16 +8,16 @@ import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Divider from "@mui/material/Divider";
 import { signIn } from "next-auth/react";
-
-
-    import Input from "./components/Input";
-    import PrimaryButton from "./components/PrimaryButton";
-    import GoogleIcon from "./components/GoogleIcon";
+import { useRouter } from "next/navigation";
+import Input from "./components/Input";
+import PrimaryButton from "./components/PrimaryButton";
+  import GoogleIcon from "./components/GoogleIcon";
 
 const ACCENT = "#22a7f0";
 const SLIDING_BG = "linear-gradient(135deg, #22a7f0 0%, #1a1a1d 100%)";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [isToggled, setIsToggled] = useState(false);
   const [visible, setVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -29,7 +29,7 @@ export default function LoginPage() {
 
   const handleRegister = async () => {
   try {
-    const res = await fetch("http://localhost:5000/api/auth/register", {
+    const res = await fetch("http://localhost:3001/api/auth/register", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -55,6 +55,7 @@ export default function LoginPage() {
 };
 
   const handleLogin = async () => {
+    
            const result = await signIn("credentials", {
             email,
             password,
@@ -63,7 +64,7 @@ export default function LoginPage() {
            if (result?.error) {
             alert("Invalid email or password ❌");
           } else {
-            alert("Login Successful ✅");
+            router.push("/configurator/dashboard");
             }};
 
   useEffect(() => {

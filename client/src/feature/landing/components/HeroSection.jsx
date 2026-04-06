@@ -311,7 +311,7 @@ const AetherFlowHero = () => {
                     >
                         <Button
                             component={Link}
-                            href="/customize"
+                            href="/login"
                             variant="contained"
                             size="large"
                             endIcon={<ArrowRight size={18} />}

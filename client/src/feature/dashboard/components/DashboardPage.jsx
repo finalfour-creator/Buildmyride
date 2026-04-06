@@ -72,7 +72,7 @@ export default function DashboardPage() {
           Quick Actions
         </h2>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }, gap: 3 }}>
-          <Link href="/customize" style={{ textDecoration: "none" }}>
+          <Link href="/configurator/customization" style={{ textDecoration: "none" }}>
             <Box sx={{ 
               background: "linear-gradient(135deg, #0f2027, #203a43)", 
               p: { xs: 2, md: 3 },
@@ -195,7 +195,7 @@ export default function DashboardPage() {
             <Box sx={{ textAlign: "center", py: 10, background: "white", border: "1px solid #e2e8f0" }}>
               <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No designs yet</h3>
               <p style={{ color: "#64748b", marginBottom: 24 }}>Start customizing your first vehicle design</p>
-              <Link href="/customize" style={{ padding: "12px 32px", background: "linear-gradient(135deg, #0f2027, #2c5364)", color: "white", textDecoration: "none", fontWeight: 600 }}>
+              <Link href="/configurator/customization" style={{ padding: "12px 32px", background: "linear-gradient(135deg, #0f2027, #2c5364)", color: "white", textDecoration: "none", fontWeight: 600 }}>
                 Create New Design
               </Link>
             </Box>

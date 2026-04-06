@@ -1,6 +1,6 @@
 import CredentialsProvider from "next-auth/providers/credentials";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 /**
  * NextAuth options: Credentials provider calling BE POST /auth/login; JWT session with accessToken.
@@ -15,22 +15,28 @@ export const authOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        const res = await fetch(`${apiUrl}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: credentials.email,
-            password: credentials.password,
-          }),
-        });
-        if (!res.ok) return null;
-        const body = await res.json();
-        if (!body?.user || !body?.token) return null;
-        return {
-          id: body.user.id,
-          email: body.user.email,
-          accessToken: body.token,
-        };
+        try {
+          const res = await fetch(`${apiUrl}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password,
+            }),
+          });
+          const body = await res.json();
+          console.log("[NextAuth] authorize status:", res.status, "body:", JSON.stringify(body));
+          if (!res.ok) return null;
+          if (!body?.user || !body?.token) return null;
+          return {
+            id: body.user.id,
+            email: body.user.email,
+            accessToken: body.token,
+          };
+        } catch (err) {
+          console.error("[NextAuth] authorize error:", err);
+          return null;
+        }
       },
     }),
   ],

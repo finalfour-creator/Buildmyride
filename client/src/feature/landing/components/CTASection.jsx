@@ -14,7 +14,7 @@ export default function CTASection() {
         </Typography>
         <Button
           component={Link}
-          href="/auth"
+          href="/login"
           variant="contained"
           size="large"
           sx={{

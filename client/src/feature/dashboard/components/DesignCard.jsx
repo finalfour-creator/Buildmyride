@@ -40,7 +40,7 @@ export default function DesignCard({ model, date, colorDot, thumbVariant, tag, i
           </Box>
         )}
         <Box sx={{ position: "absolute", bottom: 12, right: 12, display: "flex", gap: 1 }}>
-          <Link href={`/customize?id=${id}`}>
+          <Link href={`/configurator/customization?id=${id}`}>
             <button style={{ padding: "4px 12px", background: "rgba(0,0,0,0.75)", border: "none", color: "white", fontSize: 11, cursor: "pointer" }}>Open</button>
           </Link>
           <Link href="/ar-view">
