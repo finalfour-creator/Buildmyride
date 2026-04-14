@@ -79,7 +79,7 @@ export default function Navbar() {
 
           {/* Profile Avatar with Dropdown */}
           <IconButton onClick={handleClick} sx={{ p: 0 }}>
-            <Avatar sx={{ bgcolor: "#2c5364", width: 36, height: 36 }}>M</Avatar>
+            <Avatar sx={{ bgcolor: "#2c5364", width: 36, height: 36 }}>X</Avatar>
           </IconButton>
           <Menu
             anchorEl={anchorEl}

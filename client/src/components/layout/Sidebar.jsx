@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const mainNav = [
-  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/configurator/dashboard', label: 'Dashboard' },
   { href: '/dashboard/builds', label: 'My Designs', badge: '7' },
-  { href: '/customize', label: '3D Studio' },
+  { href: '/configurator/customization', label: '3D Studio' },
   { href: '/ar-view', label: 'AR Preview' },
 ];
 

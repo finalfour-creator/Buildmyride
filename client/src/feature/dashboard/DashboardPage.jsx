@@ -59,7 +59,7 @@ export default function DashboardPage() {
       {/* Welcome Section */}
       <Box sx={{ background: "white", border: "1px solid #e2e8f0", p: { xs: 3, md: 4 }, mb: 5 }}>
         <h1 style={{ fontSize: 32, fontWeight: 700, color: "#0f2027", marginBottom: 8, letterSpacing: "-0.3px" }}>
-          Welcome back, Minahil
+          Welcome back, xyz
         </h1>
         <p style={{ fontSize: 16, color: "#64748b" }}>
           Continue your automotive design work or start a new project
