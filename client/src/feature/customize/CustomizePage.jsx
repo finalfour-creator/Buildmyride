@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Typography, Button } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
 import PartSelector from "./components/PartSelector";
 import OptionsPanel from "./components/OptionsPanel";
 import AiChatbox from "./components/AiChatbox";
+import apiClient from "@/lib/axios";
 
 const parts = [
   { id: "body", name: "BODY PAINT", icon: "●" },
@@ -22,13 +23,6 @@ const rimOptions = [
   { id: "black", name: "Black Edition", price: "+$500" },
 ];
 
-const wheelOptions = [
-  { id: "alloy", name: 'Alloy 18"', price: "Included" },
-  { id: "alloy19", name: 'Alloy 19"', price: "+$400" },
-  { id: "forged", name: 'Forged 20"', price: "+$1200" },
-  { id: "racing", name: "Racing", price: "+$1800" },
-];
-
 const roofOptions = [
   { id: "gloss", name: "Gloss Black", price: "+$0" },
   { id: "carbon", name: "Carbon Fiber", price: "+$800" },
@@ -36,18 +30,56 @@ const roofOptions = [
   { id: "matte", name: "Matte Wrap", price: "+$600" },
 ];
 
-const colorPalette = [
-  "#1e3a5f", "#2d2d2d", "#b22222", "#f4f4f4", "#e67e22",
-  "#2ecc71", "#3498db", "#9b59b6", "#f1c40f", "#e74c3c"
-];
-
 export default function CustomizePage() {
   const [selectedPart, setSelectedPart] = useState("body");
   const [selectedColor, setSelectedColor] = useState("#1e3a5f");
   const [selectedRim, setSelectedRim] = useState("sport");
-  const [selectedWheel, setSelectedWheel] = useState("alloy");
+  // Per-position wheel state: each position tracks the URL of the active custom wheel (or null for original)
+  const [wheels, setWheels] = useState({
+    "front-left": null,
+    "front-right": null,
+    "rear-left": null,
+    "rear-right": null,
+  });
+  const [activeWheelPosition, setActiveWheelPosition] = useState(null);
   const [selectedRoof, setSelectedRoof] = useState("gloss");
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [modelData, setModelData] = useState(null);
+  const [modelUrl, setModelUrl] = useState();
+  const [loadingModel, setLoadingModel] = useState(true);
+
+  const wheelOptions = modelData?.parts?.wheels || [];
+  const colors = modelData?.colors || [];
+
+  useEffect(() => {
+    async function fetchModel() {
+      try {
+        console.log("Fetching models from /api/models...");
+        const res = await apiClient.get("/models");
+        const models = res.data;
+        console.log("API Response:", res);
+        console.log("Models array:", models);
+
+        if (models && models.length > 0) {
+          const firstModel = models[0];
+          console.log("First model object:", firstModel);
+          console.log("Model URL from DB:", firstModel.modelUrl);
+
+          setModelData(firstModel);
+          setModelUrl(firstModel.modelUrl);
+        } else {
+          console.warn("No models found in database. Check MongoDB connection and data.");
+        }
+      } catch (error) {
+        console.error("Model fetch error:", error);
+        console.error("Error details:", error.response?.data || error.message);
+      } finally {
+        setLoadingModel(false);
+      }
+    }
+
+    fetchModel();
+  }, []);
 
   return (
     <Box
@@ -145,9 +177,15 @@ export default function CustomizePage() {
             {/* 3D Viewer */}
             <Box sx={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden" }}>
               <ThreeViewer
-                modelPath="/models/Honda-Civic.glb"
+                modelPath={modelUrl}
                 backgroundColor="transparent"
                 modelColor={selectedPart === "body" ? selectedColor : null}
+                wheelReplacements={wheels}
+                onWheelClick={(posId) => {
+                  setActiveWheelPosition(posId);
+                  setSelectedPart("wheels");
+                  console.log("Wheel clicked in scene:", posId);
+                }}
                 sx={{ height: "100%", width: "100%" }}
               />
             </Box>
@@ -162,6 +200,8 @@ export default function CustomizePage() {
             </Box>
           </Box>
 
+
+
           {/* Options Panel - Fixed height at bottom */}
           <Box
             sx={{
@@ -173,17 +213,37 @@ export default function CustomizePage() {
           >
             <OptionsPanel
               selectedPart={selectedPart}
+
+              // COLORS FROM DB
               selectedColor={selectedColor}
               setSelectedColor={setSelectedColor}
+              colorPalette={colors.map(c => c.value)}
+
+              // WHEELS FROM DB — per-position replacement
+              activeWheelPosition={activeWheelPosition}
+              wheels={wheels}
+              setWheels={setWheels}
+              wheelOptions={wheelOptions}
+              onApplyAllWheels={(url) => {
+                setWheels({
+                  "front-left": url,
+                  "front-right": url,
+                  "rear-left": url,
+                  "rear-right": url,
+                });
+              }}
+
+              // selectedColor={selectedColor}
+              // setSelectedColor={setSelectedColor}
               selectedRim={selectedRim}
               setSelectedRim={setSelectedRim}
-              selectedWheel={selectedWheel}
-              setSelectedWheel={setSelectedWheel}
+              // selectedWheel={selectedWheel}
+              // setSelectedWheel={setSelectedWheel}
               selectedRoof={selectedRoof}
               setSelectedRoof={setSelectedRoof}
-              colorPalette={colorPalette}
+              // colorPalette={colorPalette}
               rimOptions={rimOptions}
-              wheelOptions={wheelOptions}
+              // wheelOptions={wheelOptions}
               roofOptions={roofOptions}
             />
           </Box>

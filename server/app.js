@@ -5,8 +5,9 @@ import compression from "compression";
 import rateLimit from "express-rate-limit";
 import config from "./config/index.js";
 import authRoutes from "./routes/authRoutes.js";
-import { errorHandler } from "./middleware/errorHandler.js";
 import userRoutes from "./routes/userRoutes.js";
+import modelRoutes from "./routes/modelRoutes.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 
@@ -29,10 +30,9 @@ const limiter = rateLimit({
 app.use(limiter);
 
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/models", modelRoutes);
 
 app.use(errorHandler);
-
-app.use("/api/users", userRoutes);
-
 
 export default app;
