@@ -5,8 +5,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { Box } from "@mui/material";
 import DesignCard from "./DesignCard";
+import { useSession } from "next-auth/react";
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
+
   const [activeTab, setActiveTab] = useState("designs");
 
   const savedDesigns = [
@@ -58,9 +61,9 @@ export default function DashboardPage() {
     <Box sx={{ maxWidth: 1400, margin: "0 auto", px: { xs: 2, md: 4 } }}>
       {/* Welcome Section */}
       <Box sx={{ background: "white", border: "1px solid #e2e8f0", p: { xs: 3, md: 4 }, mb: 5 }}>
-        <h1 style={{ fontSize: 32, fontWeight: 700, color: "#0f2027", marginBottom: 8, letterSpacing: "-0.3px" }}>
-          Welcome back, Minahil
-        </h1>
+       <h1 style={{ fontSize: 24, fontWeight: 500, color: "#1a2a32", marginBottom: 6 }}>
+  WELCOME BACK, <span style={{ color: "#2c5364", fontWeight: 600 }}>{session?.user?.name || "GUEST"}</span>
+</h1>
         <p style={{ fontSize: 16, color: "#64748b" }}>
           Continue your automotive design work or start a new project
         </p>
