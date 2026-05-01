@@ -191,7 +191,17 @@ export default function CustomizePage() {
       </Box>
 
       {/* AI Chatbox */}
-      <AiChatbox isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <AiChatbox
+  isOpen={isChatOpen}
+  onClose={() => setIsChatOpen(false)}
+  config={{
+    color: selectedColor,
+    rim: selectedRim,
+    wheel: selectedWheel,
+    roof: selectedRoof,
+    part: selectedPart,
+  }}
+/>
     </Box>
   );
 }
