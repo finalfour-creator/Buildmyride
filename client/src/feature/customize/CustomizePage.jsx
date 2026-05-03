@@ -191,7 +191,9 @@ export default function CustomizePage() {
       </Box>
 
       {/* AI Chatbox */}
-      <AiChatbox
+
+
+     <AiChatbox
   isOpen={isChatOpen}
   onClose={() => setIsChatOpen(false)}
   config={{
@@ -200,8 +202,15 @@ export default function CustomizePage() {
     wheel: selectedWheel,
     roof: selectedRoof,
     part: selectedPart,
+
+    
+    availableWheels: wheelOptions.map(w => w.name),
+    availableRims: rimOptions.map(r => r.name),
   }}
 />
+      
+
+
     </Box>
   );
 }

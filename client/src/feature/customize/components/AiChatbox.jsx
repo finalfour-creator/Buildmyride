@@ -28,6 +28,11 @@ export default function AiChatbox({ isOpen, onClose, config }) {
       body: JSON.stringify({ message, config }),
     });
 
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.reply || `Server error: ${res.status}`);
+    }
+
     const data = await res.json();
     return data.reply;
   };

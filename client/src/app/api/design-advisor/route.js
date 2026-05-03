@@ -1,52 +1,71 @@
 export async function POST(req) {
-console.log("KEY:", process.env.GEMINI_API_KEY);
+  try {
     const { message, config } = await req.json();
-    
 
-     
-  const prompt = `
+    if (!process.env.GEMINI_API_KEY) {
+      return Response.json(
+        { reply: "AI configuration error." },
+        { status: 500 }
+      );
+    }
+
+    // ✅ fallback safety (if config missing)
+    const wheels = config?.availableWheels || [];
+    const rims = config?.availableRims || [];
+
+    const prompt = `
 You are an AI Car Design Advisor.
 
-Analyze:
-- Visual balance
-- Style consistency
-- Compatibility
+IMPORTANT:
+- Only recommend options from the lists below
+- Do NOT suggest anything outside these options
 
-Car Design:
-${JSON.stringify(config)}
+Available Wheels:
+${wheels.join(", ")}
+
+Available Rims:
+${rims.join(", ")}
 
 User Question:
 ${message}
 
-Give short, specific, and modern design advice.
-Avoid generic suggestions.
-Mention exact styling choices (colors, rim types, finishes).
-Limit to 2-3 sentences.
+Give a short recommendation (1-2 lines).
 `;
 
-  const response = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }],
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ],
-    }),
-  }
-);
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
 
     const data = await response.json();
-    console.log("FULL GEMINI RESPONSE:", JSON.stringify(data, null, 2));
 
-  return Response.json({
-    reply:
+    let reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Something went wrong. Try again.",
-  });
+      "Try a different combination for a better look.";
+
+    // ✅ LIGHT SAFETY CHECK (optional but good)
+    const isValid =
+      wheels.some(w => reply.toLowerCase().includes(w.toLowerCase())) ||
+      rims.some(r => reply.toLowerCase().includes(r.toLowerCase()));
+
+    if (!isValid && wheels.length && rims.length) {
+      reply = `Try ${wheels[0]} with ${rims[0]} for a clean look.`;
+    }
+
+    return Response.json({ reply });
+
+  } catch (error) {
+    return Response.json(
+      { reply: "AI error. Try again." },
+      { status: 500 }
+    );
+  }
 }
