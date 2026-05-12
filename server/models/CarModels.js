@@ -1,27 +1,20 @@
 import mongoose from "mongoose";
 
-const PartSchema = new mongoose.Schema({
-  name: String,
-  modelUrl: String
-});
-
 const CarModelSchema = new mongoose.Schema({
-  name: String,
-  brand: String,
-  modelUrl: String,
-  colors: [
-    {
-      name: String,
-      value: String
-    }
-  ],
-
-   parts: {
-    wheels: [PartSchema],
-    // hood: [PartSchema],
-    // bumper: [PartSchema]
-  }
-});
+  name: {
+    type: String,
+    required: true
+  },
+  brand: {
+    type: String,
+    required: true
+  },
+  chassisUrl: {
+    type: String,
+    required: true
+  },
+  modelUrl: String, // Keeping as fallback for legacy support
+}, { timestamps: true });
 
 const CarModel = mongoose.models.CarModel || mongoose.model("CarModel", CarModelSchema);
 

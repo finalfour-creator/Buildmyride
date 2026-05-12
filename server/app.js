@@ -7,6 +7,7 @@ import config from "./config/index.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import modelRoutes from "./routes/modelRoutes.js";
+import partRoutes from "./routes/partRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -32,6 +33,7 @@ app.use(limiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/models", modelRoutes);
+app.use("/api/parts", partRoutes);
 
 app.use(errorHandler);
 

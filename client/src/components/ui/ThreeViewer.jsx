@@ -8,6 +8,47 @@ import { Box, Typography, CircularProgress } from "@mui/material";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Determine if a mesh should receive body paint color.
+ * Returns true for exterior body panels; false for windows, lights, interior, tyres, etc.
+ */
+function isBodyPaintMesh(meshName) {
+  const n = (meshName || "").toLowerCase();
+
+  // Exclude patterns: things that should NOT be painted
+  const excludePatterns = [
+    "glass", "window", "windshield", "windscreen",
+    "light", "lamp", "headlight", "taillight", "fog", "indicator", "signal",
+    "interior", "seat", "dashboard", "dash", "steering", "console",
+    "tyre", "tire", "wheel", "rim", "brake", "disc",
+    "chrome", "emblem", "logo", "badge", "plate", "number",
+    "mirror", "wiper", "antenna", "grille", "grill",
+    "rubber", "seal", "trim",
+    "exhaust", "pipe", "muffler",
+    "underbody", "undercarriage", "chassis",
+  ];
+
+  for (const pattern of excludePatterns) {
+    if (n.includes(pattern)) return false;
+  }
+
+  // Include patterns: things that SHOULD be painted (body panels)
+  const includePatterns = [
+    "body", "door", "hood", "bonnet", "fender", "bumper",
+    "roof", "trunk", "boot", "panel", "quarter", "pillar",
+    "skirt", "spoiler", "wing", "paint",
+  ];
+
+  for (const pattern of includePatterns) {
+    if (n.includes(pattern)) return true;
+  }
+
+  // If no pattern matched, include it by default (many GLTF models
+  // use generic names like "Mesh_001" for body panels)
+  // But ONLY if the name doesn't look like an excluded component
+  return true;
+}
+
+/**
  * Classify a wheel mesh into a position id.
  * First tries to extract from the mesh name (FL, FR, BL, BR codes).
  * Falls back to world-space coordinate classification.
@@ -95,6 +136,101 @@ function isDescendant(child, parent) {
   return false;
 }
 
+/**
+ * Detect spoiler meshes by traversing the GLTF scene.
+ * Returns the first spoiler mesh found.
+ */
+function discoverSpoilerMesh(model) {
+  let anchor = null;
+  let isExistingSpoiler = false;
+
+  const fullBox = new THREE.Box3().setFromObject(model);
+  const size = fullBox.getSize(new THREE.Vector3());
+
+  // 1. Look for explicit spoiler names
+  model.traverse((node) => {
+    if ((node.isMesh || node.isGroup) && !anchor) {
+      const n = (node.name || "").toLowerCase();
+
+      // Strict spoiler check (exclude mirrors, antennas, etc.)
+      const isSpoiler = (n.includes("spoiler") || n.includes("wing")) &&
+        !n.includes("mirror") &&
+        !n.includes("antenna") &&
+        !n.includes("wiper");
+
+      if (isSpoiler) {
+        // SIZE CHECK: If the "spoiler" is too large, it's probably a body panel.
+        // Don't hide it in that case.
+        const nodeBox = new THREE.Box3().setFromObject(node);
+        const nodeSize = nodeBox.getSize(new THREE.Vector3());
+
+        if (nodeSize.x < size.x * 0.7 && nodeSize.y < size.y * 0.4) {
+          anchor = node;
+          isExistingSpoiler = true;
+        } else {
+          // It's too big to be just a spoiler, treat it as a trunk anchor
+          anchor = node;
+          isExistingSpoiler = false;
+        }
+      }
+    }
+  });
+
+  // 2. Look for trunk names
+  if (!anchor) {
+    model.traverse((node) => {
+      if ((node.isMesh || node.isGroup) && !anchor) {
+        const n = (node.name || "").toLowerCase();
+        // Look for trunk-specific names
+        if (n.includes("trunk") || n.includes("boot") || n.includes("rear_deck")) {
+          const nodeBox = new THREE.Box3().setFromObject(node);
+          const nodeSize = nodeBox.getSize(new THREE.Vector3());
+          if (nodeSize.x < size.x * 0.95) {
+            anchor = node;
+            isExistingSpoiler = false;
+          }
+        }
+      }
+    });
+  }
+
+  // 3. Fallback: Find the highest mesh in the rear-most part of the car
+  if (!anchor) {
+    // We try both +Z and -Z as "rear" and pick the one that looks more like a trunk
+    // (Usually +Z is back in standard GLTF car models)
+    const rearLimitZ = fullBox.max.z - (size.z * 0.2); // Last 20%
+    let highestY = -Infinity;
+
+    model.traverse((node) => {
+      if (node.isMesh) {
+        const box = new THREE.Box3().setFromObject(node);
+        const center = box.getCenter(new THREE.Vector3());
+        const nodeSize = box.getSize(new THREE.Vector3());
+
+        // Must be in the rear 20%, not the whole car, and centered horizontally
+        if (center.z > rearLimitZ &&
+          nodeSize.x < size.x * 0.8 &&
+          Math.abs(center.x) < size.x * 0.3) {
+
+          if (box.max.y > highestY) {
+            highestY = box.max.y;
+            anchor = node;
+            isExistingSpoiler = false;
+          }
+        }
+      }
+    });
+  }
+
+  if (anchor) {
+    console.log(`[Spoiler] Identified anchor: "${anchor.name}" | Existing Spoiler: ${isExistingSpoiler}`);
+  } else {
+    console.warn("[Spoiler] No suitable anchor found for spoiler placement.");
+  }
+
+  return { mesh: anchor, isExistingSpoiler };
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ThreeViewer({
@@ -102,6 +238,7 @@ export default function ThreeViewer({
   backgroundColor = "#ffffff",
   modelColor = null,
   wheelReplacements = {},   // { "front-left": "/url.glb" | null, ... }
+  spoilerReplacement = null, // "/url.glb" | null
   onWheelClick = null,      // (positionId: string) => void
   sx = {},
 }) {
@@ -117,6 +254,12 @@ export default function ThreeViewer({
   const wheelMeshMapRef = useRef(new Map());       // positionId → original mesh
   const originalWheelDataRef = useRef(new Map());  // positionId → { position, quaternion, scale, parent }
   const customWheelsRef = useRef(new Map());       // positionId → loaded custom mesh
+
+  // Spoiler-related refs
+  const originalSpoilerRef = useRef(null);
+  const originalSpoilerDataRef = useRef(null);
+  const customSpoilerRef = useRef(null);
+
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
 
@@ -337,14 +480,14 @@ export default function ThreeViewer({
         sceneRef.current.add(model);
         modelRef.current = model;
 
-        // ── Discover wheel meshes ──────────────────────────────────────
+        // ── Discover part meshes ──────────────────────────────────────
         // Wait one frame so world matrices are updated after scaling/positioning
         requestAnimationFrame(() => {
           model.updateMatrixWorld(true);
+
+          // WHEELS
           const posMap = discoverWheelMeshes(model);
           wheelMeshMapRef.current = posMap;
-
-          // Store original transforms for each wheel
           for (const [posId, node] of posMap) {
             originalWheelDataRef.current.set(posId, {
               position: node.position.clone(),
@@ -354,13 +497,28 @@ export default function ThreeViewer({
               visible: node.visible,
             });
           }
-          console.log("Wheel mesh map ready:", Object.fromEntries(posMap));
+
+          // SPOILER
+          const spoilerResult = discoverSpoilerMesh(model);
+          if (spoilerResult.mesh) {
+            const { mesh: spoilerNode, isExistingSpoiler } = spoilerResult;
+            originalSpoilerRef.current = spoilerNode;
+            originalSpoilerDataRef.current = {
+              position: spoilerNode.position.clone(),
+              quaternion: spoilerNode.quaternion.clone(),
+              scale: spoilerNode.scale.clone(),
+              parent: spoilerNode.parent,
+              visible: spoilerNode.visible,
+              isExistingSpoiler,
+            };
+            console.log("Spoiler anchor stored:", spoilerNode.name);
+          }
         });
 
-        // Apply initial color
+        // Apply initial color (body meshes only)
         if (modelColor) {
           model.traverse((node) => {
-            if (node.isMesh && node.material) {
+            if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
               const mats = Array.isArray(node.material) ? node.material : [node.material];
               mats.forEach((m) => m.color && m.color.set(modelColor));
             }
@@ -390,11 +548,11 @@ export default function ThreeViewer({
     };
   }, [modelPath]);
 
-  // ── Color updates ─────────────────────────────────────────────────────────
+  // ── Color updates (body meshes only) ───────────────────────────────────────
   useEffect(() => {
     if (!modelColor || !modelRef.current) return;
     modelRef.current.traverse((node) => {
-      if (node.isMesh && node.material) {
+      if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
         const mats = Array.isArray(node.material) ? node.material : [node.material];
         mats.forEach((m) => m.color && m.color.set(modelColor));
       }
@@ -464,64 +622,54 @@ export default function ThreeViewer({
             }
           });
 
-          // Measure the custom wheel's natural size (in its own local space)
+          // Measure sizes
           const customBox = new THREE.Box3().setFromObject(customWheel);
           const customSize = customBox.getSize(new THREE.Vector3());
-          console.log(`[${posId}] Custom wheel natural size:`, customSize);
+          const customCenter = customBox.getCenter(new THREE.Vector3());
 
-          // origSize is in WORLD space (includes parent's scale).
-          // customSize is in LOCAL space (no parent yet).
-          // When we add customWheel to the parent, parentScale is applied again.
-          // So we must divide fitScale by parentScale to avoid double-scaling.
+          // Calculate fit scale based on height (Y-axis) to match original wheel diameter
+          let finalScale = 1;
+          if (customSize.y > 0 && origSize.y > 0) {
+            finalScale = origSize.y / customSize.y;
+          }
+
           const parentWorldScale = new THREE.Vector3(1, 1, 1);
           if (originalData.parent) {
             originalData.parent.getWorldScale(parentWorldScale);
           }
-          console.log(`[${posId}] Parent world scale:`, parentWorldScale);
 
-          if (customSize.x > 0 && customSize.y > 0 && customSize.z > 0) {
-            const fitScale = Math.min(
-              origSize.x / customSize.x,
-              origSize.y / customSize.y,
-              origSize.z / customSize.z
-            );
-            // Divide by parent's world scale to compensate for it being applied again
-            const correctedScale = fitScale / parentWorldScale.x;
-            customWheel.scale.setScalar(correctedScale);
-            console.log(`[${posId}] Fit scale: ${fitScale}, corrected: ${correctedScale}`);
-          }
+          // Set scale, compensating for parent's world scale
+          customWheel.scale.setScalar(finalScale / parentWorldScale.y);
 
-          // Copy the original's rotation
+          // Copy rotation
           customWheel.quaternion.copy(originalData.quaternion);
 
-          // Add as sibling of the original (same parent → inherits car transforms)
+          // Mirror right-side
+          if (posId.includes("right")) {
+            customWheel.rotateY(Math.PI);
+          }
+
+          // Add to parent
           if (originalData.parent) {
             originalData.parent.add(customWheel);
           } else {
             sceneRef.current.add(customWheel);
           }
 
-          // ── Align centers: position custom wheel so its bbox center
-          //    matches the original wheel's bbox center in world space ──
-          customWheel.position.set(0, 0, 0); // reset first
+          // Positioning: Align centers in world space
           customWheel.updateMatrixWorld(true);
+          const newCustomBox = new THREE.Box3().setFromObject(customWheel);
+          const newCustomCenter = newCustomBox.getCenter(new THREE.Vector3());
+          const worldOffset = new THREE.Vector3().subVectors(origCenter, newCustomCenter);
 
-          // Where the custom wheel's center is NOW in world space
-          const currentCustomBox = new THREE.Box3().setFromObject(customWheel);
-          const currentCustomCenter = currentCustomBox.getCenter(new THREE.Vector3());
-
-          // World-space offset needed to align centers
-          const worldOffset = new THREE.Vector3().subVectors(origCenter, currentCustomCenter);
-
-          // Convert world offset to parent-local space (divide by parent's scale)
-          customWheel.position.set(
+          customWheel.position.add(new THREE.Vector3(
             worldOffset.x / parentWorldScale.x,
             worldOffset.y / parentWorldScale.y,
             worldOffset.z / parentWorldScale.z
-          );
-          console.log(`[${posId}] Aligned center. World offset:`, worldOffset, `Local pos:`, customWheel.position);
+          ));
 
           customWheelsRef.current.set(posId, customWheel);
+          console.log(`[${posId}] Replaced with scale ${finalScale}`);
           console.log(`[${posId}] Replacement wheel added to scene`);
         },
         undefined,
@@ -534,6 +682,166 @@ export default function ThreeViewer({
       );
     }
   }, [wheelReplacements]);
+
+  // ── Spoiler replacement effect ──────────────────────────────────────────
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    if (!originalSpoilerRef.current || !originalSpoilerDataRef.current) return;
+
+    const loader = new GLTFLoader();
+    const originalMesh = originalSpoilerRef.current;
+    const originalData = originalSpoilerDataRef.current;
+
+    // Remove existing custom spoiler
+    if (customSpoilerRef.current) {
+      if (customSpoilerRef.current.parent) {
+        customSpoilerRef.current.parent.remove(customSpoilerRef.current);
+      }
+      customSpoilerRef.current = null;
+    }
+
+    if (!spoilerReplacement) {
+      // Reset: show original spoiler if it was a spoiler, or just ensure anchor is visible
+      originalMesh.visible = originalData.visible;
+      originalMesh.traverse((child) => { child.visible = true; });
+      return;
+    }
+
+    // Hide original ONLY if it was actually a spoiler
+    if (originalData.isExistingSpoiler) {
+      originalMesh.visible = false;
+      originalMesh.traverse((child) => { child.visible = false; });
+    } else {
+      // If it's a trunk, ensure it stays visible
+      originalMesh.visible = true;
+      originalMesh.traverse((child) => { child.visible = true; });
+    }
+
+    // Load replacement
+    console.log("Loading custom spoiler from:", spoilerReplacement);
+    loader.load(
+      spoilerReplacement,
+      (gltf) => {
+        if (!sceneRef.current) return;
+
+        const customSpoiler = gltf.scene;
+        console.log("Custom spoiler GLTF loaded successfully");
+
+        // Enable shadows
+        customSpoiler.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        // ── Align centers ──
+        // Ensure original is temporarily visible/updated for correct bbox
+        const wasVisible = originalMesh.visible;
+        originalMesh.visible = true;
+        originalMesh.updateMatrixWorld(true);
+
+        const origBox = new THREE.Box3().setFromObject(originalMesh);
+        const origCenter = origBox.getCenter(new THREE.Vector3());
+        const origSize = origBox.getSize(new THREE.Vector3());
+
+        originalMesh.visible = wasVisible;
+
+        // Add to same parent or scene
+        if (originalData.parent) {
+          originalData.parent.add(customSpoiler);
+        } else {
+          sceneRef.current.add(customSpoiler);
+        }
+
+        // Reset transforms to identity before computing offset
+        customSpoiler.position.set(0, 0, 0);
+        customSpoiler.quaternion.set(0, 0, 0, 1);
+        customSpoiler.scale.set(1, 1, 1);
+        customSpoiler.updateMatrixWorld(true);
+
+        // 1. Orientation & Scale Adjustment
+        // We find the dimensions of the spoiler and ensure its "longest horizontal side" 
+        // aligns with the car's width (X-axis).
+        const tempBox = new THREE.Box3().setFromObject(customSpoiler);
+        const tempSize = tempBox.getSize(new THREE.Vector3());
+
+        // If it's deeper than it is wide, it's probably sideways. Rotate 90 deg.
+        if (tempSize.z > tempSize.x) {
+          console.log("[Spoiler] Model appears sideways. Rotating 90 degrees.");
+          customSpoiler.rotateY(Math.PI / 2);
+          customSpoiler.updateMatrixWorld(true);
+        }
+
+        const customBox = new THREE.Box3().setFromObject(customSpoiler);
+        const customSize = customBox.getSize(new THREE.Vector3());
+        const targetWidth = origSize.x * 0.85; // Target ~85% of trunk width
+
+        // Use X (width) for scaling after ensuring correct rotation
+        const scaleFactor = targetWidth / (customSize.x || 1);
+        const finalScale = Math.min(scaleFactor, 100.0);
+
+        customSpoiler.scale.setScalar(finalScale);
+        console.log(`[Spoiler] Scaling: ${finalScale.toFixed(4)} (Target width: ${targetWidth.toFixed(4)})`);
+
+        // 2. Position Alignment (World Space)
+        customSpoiler.updateMatrixWorld(true);
+        const currentCustomBox = new THREE.Box3().setFromObject(customSpoiler);
+        const currentCustomCenter = currentCustomBox.getCenter(new THREE.Vector3());
+
+        // Move to anchor center (World space)
+        const worldOffset = new THREE.Vector3().subVectors(origCenter, currentCustomCenter);
+
+        // Convert world offset to parent local space
+        const parentWorldScale = new THREE.Vector3(1, 1, 1);
+        const parentWorldQuaternion = new THREE.Quaternion();
+        if (customSpoiler.parent) {
+          customSpoiler.parent.getWorldScale(parentWorldScale);
+          customSpoiler.parent.getWorldQuaternion(parentWorldQuaternion);
+        }
+
+        // Apply translation (World-to-Local)
+        const invQuaternion = parentWorldQuaternion.clone().invert();
+        const localOffset = worldOffset.clone().applyQuaternion(invQuaternion);
+
+        customSpoiler.position.add(new THREE.Vector3(
+          localOffset.x / parentWorldScale.x,
+          localOffset.y / parentWorldScale.y,
+          localOffset.z / parentWorldScale.z
+        ));
+
+        // 3. Lock to Top Surface
+        customSpoiler.updateMatrixWorld(true);
+        const updatedCustomBox = new THREE.Box3().setFromObject(customSpoiler);
+
+        const targetTopY = origBox.max.y;
+        const spoilerBottomY = updatedCustomBox.min.y;
+        console.log(`[Spoiler] Aligning: Trunk Top Y = ${targetTopY.toFixed(4)}, Spoiler Bottom Y = ${spoilerBottomY.toFixed(4)}`);
+
+        // Add a 0.08 world-unit gap to sit clearly above the surface
+        const yCorrectionWorld = (targetTopY - spoilerBottomY) + 0.08;
+
+        // Apply Y correction in local space (World-to-Local)
+        const invQuaternionY = parentWorldQuaternion.clone().invert();
+        const localYCorrection = new THREE.Vector3(0, yCorrectionWorld, 0).applyQuaternion(invQuaternionY);
+        customSpoiler.position.y += (localYCorrection.y / parentWorldScale.y);
+
+        // 4. Positional Adjustment (Move to rear edge)
+        // Adjust this factor if it sits too far forward or back
+        const zShift = (origSize.z * 0.0) / parentWorldScale.z;
+        customSpoiler.position.z += zShift;
+
+        customSpoilerRef.current = customSpoiler;
+        console.log(`Spoiler placed on ${originalMesh.name} at Y: ${customSpoiler.position.y}`);
+      },
+      undefined,
+      (err) => {
+        console.error("Failed to load custom spoiler:", err);
+        originalMesh.visible = true;
+        originalMesh.traverse((child) => { child.visible = true; });
+      }
+    );
+  }, [spoilerReplacement]);
 
   const overlayBg = backgroundColor === "transparent" ? "rgba(0,0,0,0.4)" : backgroundColor;
 

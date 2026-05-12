@@ -6,80 +6,94 @@ import PartSelector from "./components/PartSelector";
 import OptionsPanel from "./components/OptionsPanel";
 import AiChatbox from "./components/AiChatbox";
 import apiClient from "@/lib/axios";
-
-const parts = [
-  { id: "body", name: "BODY PAINT", icon: "●" },
-  { id: "rims", name: "RIMS", icon: "◉" },
-  { id: "wheels", name: "WHEELS", icon: "○" },
-  { id: "roof", name: "ROOF", icon: "□" },
-  { id: "interior", name: "INTERIOR", icon: "△" },
-  { id: "lights", name: "LIGHTS", icon: "◇" },
-];
-
-const rimOptions = [
-  { id: "sport", name: "Sport", price: "+$0" },
-  { id: "premium", name: "Premium", price: "+$300" },
-  { id: "classic", name: "Classic", price: "+$200" },
-  { id: "black", name: "Black Edition", price: "+$500" },
-];
-
-const roofOptions = [
-  { id: "gloss", name: "Gloss Black", price: "+$0" },
-  { id: "carbon", name: "Carbon Fiber", price: "+$800" },
-  { id: "glass", name: "Panoramic Glass", price: "+$1200" },
-  { id: "matte", name: "Matte Wrap", price: "+$600" },
-];
+import { useSearchParams } from "next/navigation";
 
 export default function CustomizePage() {
+  const searchParams = useSearchParams();
+  const carId = searchParams.get("carId");
+
   const [selectedPart, setSelectedPart] = useState("body");
   const [selectedColor, setSelectedColor] = useState("#1e3a5f");
-  const [selectedRim, setSelectedRim] = useState("sport");
-  // Per-position wheel state: each position tracks the URL of the active custom wheel (or null for original)
+  
+  // Dynamic Categories from DB
+  const [categories, setCategories] = useState([
+    { id: "body", name: "BODY PAINT", icon: "●" } // Always show body paint
+  ]);
+  const [availableParts, setAvailableParts] = useState({});
+
   const [wheels, setWheels] = useState({
-    "front-left": null,
-    "front-right": null,
-    "rear-left": null,
-    "rear-right": null,
+    "front-left": null, "front-right": null, "rear-left": null, "rear-right": null,
   });
   const [activeWheelPosition, setActiveWheelPosition] = useState(null);
-  const [selectedRoof, setSelectedRoof] = useState("gloss");
+  const [selectedSpoiler, setSelectedSpoiler] = useState(null);
+
+  // The "Current Build" state tracks all equipped modular parts
+  const [currentBuild, setCurrentBuild] = useState({});
+
+  const handlePartSelect = (category, url) => {
+    setCurrentBuild(prev => ({ ...prev, [category]: url }));
+    // Legacy support for spoiler
+    if (category.toLowerCase() === "spoiler") {
+      setSelectedSpoiler(url);
+    }
+  };
+
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [modelData, setModelData] = useState(null);
   const [modelUrl, setModelUrl] = useState();
   const [loadingModel, setLoadingModel] = useState(true);
 
   const wheelOptions = modelData?.parts?.wheels || [];
+  const spoilerOptions = modelData?.parts?.spoilers || [];
   const colors = modelData?.colors || [];
 
   useEffect(() => {
-    async function fetchModel() {
+    async function fetchData() {
       try {
-        console.log("Fetching models from /api/models...");
-        const res = await apiClient.get("/models");
-        const models = res.data;
-        console.log("API Response:", res);
-        console.log("Models array:", models);
+        setLoadingModel(true);
+        
+        // 1. Fetch Chassis
+        const modelEndpoint = carId ? `/models/${carId}` : "/models";
+        const modelRes = await apiClient.get(modelEndpoint);
+        const model = Array.isArray(modelRes.data) ? modelRes.data[0] : modelRes.data;
 
-        if (models && models.length > 0) {
-          const firstModel = models[0];
-          console.log("First model object:", firstModel);
-          console.log("Model URL from DB:", firstModel.modelUrl);
+        if (model) {
+          setModelData(model);
+          setModelUrl(model.chassisUrl || model.modelUrl);
 
-          setModelData(firstModel);
-          setModelUrl(firstModel.modelUrl);
-        } else {
-          console.warn("No models found in database. Check MongoDB connection and data.");
+          // 2. Fetch Compatible Parts
+          const partsRes = await apiClient.get(`/parts?carId=${model._id}`);
+          const parts = partsRes.data;
+
+          // Group parts by category for the OptionsPanel
+          const grouped = {};
+          const dynamicCategories = [{ id: "body", name: "BODY PAINT", icon: "●" }];
+
+          parts.forEach(part => {
+            if (!grouped[part.category]) {
+              grouped[part.category] = [];
+              // Add to the sidebar menu if it's a new category
+              dynamicCategories.push({
+                id: part.category.toLowerCase(),
+                name: part.category.toUpperCase(),
+                icon: "▣"
+              });
+            }
+            grouped[part.category].push(part);
+          });
+
+          setAvailableParts(grouped);
+          setCategories(dynamicCategories);
         }
       } catch (error) {
-        console.error("Model fetch error:", error);
-        console.error("Error details:", error.response?.data || error.message);
+        console.error("Data fetch error:", error);
       } finally {
         setLoadingModel(false);
       }
     }
 
-    fetchModel();
-  }, []);
+    fetchData();
+  }, [carId]);
 
   return (
     <Box
@@ -181,10 +195,11 @@ export default function CustomizePage() {
                 backgroundColor="transparent"
                 modelColor={selectedPart === "body" ? selectedColor : null}
                 wheelReplacements={wheels}
+                spoilerReplacement={selectedSpoiler}
+                currentBuild={currentBuild} // PASS THE FULL BUILD
                 onWheelClick={(posId) => {
                   setActiveWheelPosition(posId);
                   setSelectedPart("wheels");
-                  console.log("Wheel clicked in scene:", posId);
                 }}
                 sx={{ height: "100%", width: "100%" }}
               />
@@ -193,7 +208,7 @@ export default function CustomizePage() {
             {/* Part Selector - Extreme Right */}
             <Box sx={{ width: 250, flexShrink: 0, overflow: "auto" }}>
               <PartSelector
-                parts={parts}
+                parts={categories}
                 selectedPart={selectedPart}
                 onSelect={setSelectedPart}
               />
@@ -233,18 +248,10 @@ export default function CustomizePage() {
                 });
               }}
 
-              // selectedColor={selectedColor}
-              // setSelectedColor={setSelectedColor}
-              selectedRim={selectedRim}
-              setSelectedRim={setSelectedRim}
-              // selectedWheel={selectedWheel}
-              // setSelectedWheel={setSelectedWheel}
-              selectedRoof={selectedRoof}
-              setSelectedRoof={setSelectedRoof}
-              // colorPalette={colorPalette}
-              rimOptions={rimOptions}
-              // wheelOptions={wheelOptions}
-              roofOptions={roofOptions}
+              // SPOILERS FROM DB
+              selectedSpoiler={selectedSpoiler}
+              setSelectedSpoiler={setSelectedSpoiler}
+              spoilerOptions={spoilerOptions}
             />
           </Box>
         </Box>
