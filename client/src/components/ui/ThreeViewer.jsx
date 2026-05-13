@@ -88,19 +88,51 @@ function discoverWheelMeshes(model) {
     }
   });
 
-  // Collect candidates — include "tyre" (British spelling)
+  // Collect candidates — include "tyre" (British spelling) and anchor points
   model.traverse((node) => {
     if (node.isMesh || node.isGroup) {
       const n = (node.name || "").toLowerCase();
-      if (n.includes("wheel") || n.includes("tire") || n.includes("tyre") || n.includes("rim")) {
+      const isWheelPart = n.includes("wheel") || n.includes("tire") || n.includes("tyre") || n.includes("rim");
+      const isAnchor = (n.includes("pos_") || n.includes("anchor_")) &&
+        (n.includes("fl") || n.includes("fr") || n.includes("bl") || n.includes("br") || n.includes("rl") || n.includes("rr"));
+
+      if (isWheelPart || isAnchor) {
         candidates.push(node);
       }
     }
   });
 
   if (candidates.length === 0) {
-    console.warn("No wheel meshes found by name.");
-    return new Map();
+    console.warn("No wheel markers found. Generating virtual anchors based on car size...");
+
+    // Fallback: Generate 4 virtual anchors at the corners of the car
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+
+    // Approximate wheel positions (Relative to CENTER)
+    const xOffset = size.x * 0.48; // Push wheels OUT towards the sides
+    const zOffset = size.z * 0.32; // Move wheels OUT towards the front/back ends
+    const yPos = box.min.y + (size.y * 0.15); // Slightly above bottom
+
+    const virtualAnchors = new Map();
+    const positions = [
+      { id: "front-left", pos: [center.x - xOffset, yPos, center.z + zOffset] },
+      { id: "front-right", pos: [center.x + xOffset, yPos, center.z + zOffset] },
+      { id: "rear-left", pos: [center.x - xOffset, yPos, center.z - zOffset] },
+      { id: "rear-right", pos: [center.x + xOffset, yPos, center.z - zOffset] }
+    ];
+
+    positions.forEach(p => {
+      const anchor = new THREE.Group();
+      anchor.name = `virtual_anchor_${p.id}`;
+      // Set the world position
+      anchor.position.set(...p.pos);
+      // We don't add it to the model to avoid distorting the model's bounding box
+      virtualAnchors.set(p.id, anchor);
+    });
+
+    return virtualAnchors;
   }
 
   // Deduplicate: if a parent and its child both match, prefer the parent
@@ -239,6 +271,7 @@ export default function ThreeViewer({
   modelColor = null,
   wheelReplacements = {},   // { "front-left": "/url.glb" | null, ... }
   spoilerReplacement = null, // "/url.glb" | null
+  currentBuild = {},        // { "Front_Bumper": "/url.glb", ... }
   onWheelClick = null,      // (positionId: string) => void
   sx = {},
 }) {
@@ -259,6 +292,9 @@ export default function ThreeViewer({
   const originalSpoilerRef = useRef(null);
   const originalSpoilerDataRef = useRef(null);
   const customSpoilerRef = useRef(null);
+
+  // Modular parts tracking (Bumper, Hood, etc.)
+  const modularPartsRef = useRef(new Map()); // slotKey -> THREE.Group
 
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
@@ -562,15 +598,21 @@ export default function ThreeViewer({
   // ── Wheel replacement effect ──────────────────────────────────────────────
   useEffect(() => {
     if (!sceneRef.current) return;
-    if (wheelMeshMapRef.current.size === 0) return;
+    console.log("[Wheels] Replacement requested for:", wheelReplacements);
+    if (wheelMeshMapRef.current.size === 0) {
+      console.error("[Wheels] Cannot apply wheels: No wheel meshes or anchors were discovered in the car model!");
+      return;
+    }
 
     const loader = new GLTFLoader();
 
     for (const [posId, wheelUrl] of Object.entries(wheelReplacements)) {
+      console.log(`[Wheels] Processing position: ${posId} | URL: ${wheelUrl}`);
       const originalData = originalWheelDataRef.current.get(posId);
       const originalMesh = wheelMeshMapRef.current.get(posId);
+
       if (!originalMesh || !originalData) {
-        console.warn(`No original wheel data for position "${posId}"`);
+        console.warn(`[Wheels] Skipping ${posId}: No anchor/mesh found in model.`);
         continue;
       }
 
@@ -588,17 +630,21 @@ export default function ThreeViewer({
         continue;
       }
 
-      // ── Compute original bounding box BEFORE hiding ──
-      // Temporarily ensure original is visible for correct bbox
-      originalMesh.visible = true;
       originalMesh.traverse((child) => { child.visible = true; });
       originalMesh.updateMatrixWorld(true);
 
+      // Measure the original space (anchor or existing wheel)
       const origBox = new THREE.Box3().setFromObject(originalMesh);
-      const origSize = origBox.getSize(new THREE.Vector3());
-      const origCenter = origBox.getCenter(new THREE.Vector3());
+      const origSize = new THREE.Vector3();
+      origBox.getSize(origSize);
 
-      console.log(`[${posId}] Original wheel bbox size:`, origSize, "center:", origCenter);
+      // If it's a virtual anchor (no size), use its world position directly
+      let origCenter = new THREE.Vector3();
+      if (origSize.length() < 0.01) {
+        originalMesh.getWorldPosition(origCenter);
+      } else {
+        origBox.getCenter(origCenter);
+      }
 
       // NOW hide original wheel
       originalMesh.visible = false;
@@ -629,8 +675,10 @@ export default function ThreeViewer({
 
           // Calculate fit scale based on height (Y-axis) to match original wheel diameter
           let finalScale = 1;
-          if (customSize.y > 0 && origSize.y > 0) {
-            finalScale = origSize.y / customSize.y;
+          const targetSizeY = origSize.y > 0 ? origSize.y : 0.26; // Smaller diameter (0.26 instead of 0.38)
+
+          if (customSize.y > 0) {
+            finalScale = targetSizeY / customSize.y;
           }
 
           const parentWorldScale = new THREE.Vector3(1, 1, 1);
@@ -644,16 +692,16 @@ export default function ThreeViewer({
           // Copy rotation
           customWheel.quaternion.copy(originalData.quaternion);
 
-          // Mirror right-side
-          if (posId.includes("right")) {
+          // Mirror rotation so rims face OUTWARD
+          // If the wheel faces inward, we flip the side logic here
+          if (posId.includes("left")) {
             customWheel.rotateY(Math.PI);
           }
 
-          // Add to parent
-          if (originalData.parent) {
-            originalData.parent.add(customWheel);
-          } else {
-            sceneRef.current.add(customWheel);
+          // Add to parent (or scene if it's a virtual anchor)
+          const attachmentParent = originalMesh.parent || sceneRef.current;
+          if (attachmentParent) {
+            attachmentParent.add(customWheel);
           }
 
           // Positioning: Align centers in world space
@@ -683,7 +731,100 @@ export default function ThreeViewer({
     }
   }, [wheelReplacements]);
 
-  // ── Spoiler replacement effect ──────────────────────────────────────────
+  // ── Modular Part Attachment Effect ─────────────────────────────────────────
+  useEffect(() => {
+    if (!sceneRef.current || !modelRef.current) return;
+
+    const loader = new GLTFLoader();
+
+    // 1. Determine what needs to be added or removed
+    const currentSlots = Object.keys(currentBuild);
+    const loadedSlots = Array.from(modularPartsRef.current.keys());
+
+    // Cleanup: Remove slots that are no longer in the build or have changed to null
+    loadedSlots.forEach(slotKey => {
+      if (!currentBuild[slotKey]) {
+        const oldPart = modularPartsRef.current.get(slotKey);
+        if (oldPart?.parent) oldPart.parent.remove(oldPart);
+        modularPartsRef.current.delete(slotKey);
+      }
+    });
+
+    // Load/Update: Iterate through current build
+    currentSlots.forEach(slotKey => {
+      const partUrl = currentBuild[slotKey];
+      if (!partUrl) return;
+
+      // Skip if this specific URL is already loaded in this slot
+      if (modularPartsRef.current.get(slotKey)?.userData?.url === partUrl) return;
+
+      console.log(`[Modular] Attaching part to slot: ${slotKey} | URL: ${partUrl}`);
+
+      loader.load(partUrl, (gltf) => {
+        if (!modelRef.current) return;
+
+        const newPart = gltf.scene;
+        newPart.userData.url = partUrl;
+
+        // Find Anchor Point in the Chassis
+        let anchor = null;
+
+        // Try various naming patterns for the anchor
+        const possibleNames = [
+          `pos_${slotKey}`,
+          `anchor_${slotKey}`,
+          `POS_${slotKey}`,
+          `ANCHOR_${slotKey}`,
+          slotKey
+        ];
+
+        modelRef.current.traverse(node => {
+          if (!anchor && possibleNames.includes(node.name)) {
+            anchor = node;
+          }
+        });
+
+        // If no specific anchor found, try a fuzzy search
+        if (!anchor) {
+          modelRef.current.traverse(node => {
+            if (!anchor && node.name.toLowerCase().includes(slotKey.toLowerCase())) {
+              anchor = node;
+            }
+          });
+        }
+
+        if (anchor) {
+          console.log(`[Modular] Found anchor for ${slotKey}: ${anchor.name}`);
+
+          // Remove old part before adding new one
+          const oldPart = modularPartsRef.current.get(slotKey);
+          if (oldPart?.parent) oldPart.parent.remove(oldPart);
+
+          // Enable shadows
+          newPart.traverse(child => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+
+          // Match Anchor Transform
+          anchor.add(newPart);
+          newPart.position.set(0, 0, 0);
+          newPart.quaternion.set(0, 0, 0, 1);
+          newPart.scale.set(1, 1, 1);
+
+          modularPartsRef.current.set(slotKey, newPart);
+        } else {
+          console.warn(`[Modular] No anchor point found for slot: ${slotKey}. Part may not appear correctly.`);
+          // As a fallback, just add to the model center
+          modelRef.current.add(newPart);
+          modularPartsRef.current.set(slotKey, newPart);
+        }
+      });
+    });
+
+  }, [currentBuild]);
   useEffect(() => {
     if (!sceneRef.current) return;
     if (!originalSpoilerRef.current || !originalSpoilerDataRef.current) return;

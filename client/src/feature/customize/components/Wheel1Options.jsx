@@ -5,7 +5,7 @@ export default function WheelOptions({
   activeWheelPosition,
   wheels,
   setWheels,
-  wheelOptions,
+  wheelOptions = [], // Default to empty array
   onApplyAllWheels,
 }) {
   const currentWheelUrl = activeWheelPosition ? wheels?.[activeWheelPosition] : null;

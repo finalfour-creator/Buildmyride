@@ -4,8 +4,8 @@ import ModularPartOptions from "./ModularPartOptions";
 
 export default function OptionsPanel({
   selectedPart, // This is now the category name (e.g. "bumper", "spoiler")
-  availableParts,
-  currentBuild,
+  availableParts = {}, // Default to empty object to prevent crash
+  currentBuild = {},   // Default to empty object
   onPartSelect,
   // Existing props for Body/Wheels
   selectedColor,
@@ -41,18 +41,16 @@ export default function OptionsPanel({
   }
 
   // 3. Dynamic Case: All other parts (Bumper, Spoiler, Hood, etc.)
-  // We match the selectedPart (id) to the availableParts (category name)
-  const categoryKey = Object.keys(availableParts).find(
-    k => k.toLowerCase() === selectedPart.toLowerCase()
-  );
+  // The selectedPart ID now directly matches the lowercase key in availableParts
+  const categoryData = availableParts[selectedPart];
 
-  if (categoryKey) {
+  if (categoryData) {
     return (
       <ModularPartOptions
-        category={categoryKey}
-        options={availableParts[categoryKey]}
-        selectedPartUrl={currentBuild[categoryKey]}
-        onSelect={(url) => onPartSelect(categoryKey, url)}
+        category={selectedPart}
+        options={categoryData}
+        currentBuild={currentBuild}
+        onSelect={(url, slot) => onPartSelect(selectedPart, url, slot)}
       />
     );
   }

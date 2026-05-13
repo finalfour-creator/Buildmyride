@@ -1,5 +1,5 @@
 import express from "express";
-import { getModels, createModel } from "../controllers/modelController.js";
+import { getModels, createModel, getModelById } from "../controllers/modelController.js";
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ router.get("/", (req, res, next) => {
   next();
 }, getModels);
 
+router.get("/:id", getModelById);
 router.post("/", createModel);
 
 export default router;

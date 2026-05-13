@@ -30,8 +30,12 @@ export default function CustomizePage() {
   // The "Current Build" state tracks all equipped modular parts
   const [currentBuild, setCurrentBuild] = useState({});
 
-  const handlePartSelect = (category, url) => {
-    setCurrentBuild(prev => ({ ...prev, [category]: url }));
+  const handlePartSelect = (category, url, slot) => {
+    // If a specific slot is provided (e.g. "Front_Bumper"), use it.
+    // Otherwise, use the category name.
+    const key = slot || category;
+    setCurrentBuild(prev => ({ ...prev, [key]: url }));
+    
     // Legacy support for spoiler
     if (category.toLowerCase() === "spoiler") {
       setSelectedSpoiler(url);
@@ -70,16 +74,18 @@ export default function CustomizePage() {
           const dynamicCategories = [{ id: "body", name: "BODY PAINT", icon: "●" }];
 
           parts.forEach(part => {
-            if (!grouped[part.category]) {
-              grouped[part.category] = [];
-              // Add to the sidebar menu if it's a new category
+            const catId = part.category.toLowerCase(); 
+            const displayName = part.category.charAt(0).toUpperCase() + part.category.slice(1).toLowerCase();
+
+            if (!grouped[catId]) {
+              grouped[catId] = [];
               dynamicCategories.push({
-                id: part.category.toLowerCase(),
-                name: part.category.toUpperCase(),
+                id: catId,
+                name: displayName.toUpperCase(),
                 icon: "▣"
               });
             }
-            grouped[part.category].push(part);
+            grouped[catId].push(part);
           });
 
           setAvailableParts(grouped);
@@ -205,54 +211,32 @@ export default function CustomizePage() {
               />
             </Box>
 
-            {/* Part Selector - Extreme Right */}
-            <Box sx={{ width: 250, flexShrink: 0, overflow: "auto" }}>
+            {/* Unified Accordion Selector - Extreme Right */}
+            <Box sx={{ width: 320, flexShrink: 0, overflow: "auto" }}>
               <PartSelector
                 parts={categories}
                 selectedPart={selectedPart}
                 onSelect={setSelectedPart}
+                availableParts={availableParts}
+                currentBuild={currentBuild}
+                onPartSelect={handlePartSelect}
+                
+                // Body/Color Props
+                selectedColor={selectedColor}
+                setSelectedColor={setSelectedColor}
+                colorPalette={colors.map(c => c.value)}
+
+                // Wheel Props
+                activeWheelPosition={activeWheelPosition}
+                wheels={wheels}
+                setWheels={setWheels}
+                onApplyAllWheels={(url) => {
+                  setWheels({
+                    "front-left": url, "front-right": url, "rear-left": url, "rear-right": url,
+                  });
+                }}
               />
             </Box>
-          </Box>
-
-
-
-          {/* Options Panel - Fixed height at bottom */}
-          <Box
-            sx={{
-              mt: 1.5,
-              flexShrink: 0,
-              maxHeight: "30%",
-              overflow: "auto",
-            }}
-          >
-            <OptionsPanel
-              selectedPart={selectedPart}
-
-              // COLORS FROM DB
-              selectedColor={selectedColor}
-              setSelectedColor={setSelectedColor}
-              colorPalette={colors.map(c => c.value)}
-
-              // WHEELS FROM DB — per-position replacement
-              activeWheelPosition={activeWheelPosition}
-              wheels={wheels}
-              setWheels={setWheels}
-              wheelOptions={wheelOptions}
-              onApplyAllWheels={(url) => {
-                setWheels({
-                  "front-left": url,
-                  "front-right": url,
-                  "rear-left": url,
-                  "rear-right": url,
-                });
-              }}
-
-              // SPOILERS FROM DB
-              selectedSpoiler={selectedSpoiler}
-              setSelectedSpoiler={setSelectedSpoiler}
-              spoilerOptions={spoilerOptions}
-            />
           </Box>
         </Box>
       </Box>

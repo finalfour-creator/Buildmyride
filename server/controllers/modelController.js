@@ -18,3 +18,13 @@ export const getModels = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const getModelById = async (req, res) => {
+  try {
+    const model = await CarModel.findById(req.params.id);
+    if (!model) return res.status(404).json({ message: "Car model not found" });
+    res.status(200).json(model);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
