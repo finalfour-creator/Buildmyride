@@ -1,7 +1,7 @@
 import axios from "axios";
 import { getSession } from "next-auth/react";
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 /**
  * Axios instance for backend API. Attaches Bearer token from NextAuth session when available.
