@@ -72,7 +72,7 @@ export default function DashboardPage() {
           Quick Actions
         </h2>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }, gap: 3 }}>
-          <Link href="/customize" style={{ textDecoration: "none" }}>
+          <Link href="/configurator/selection" style={{ textDecoration: "none" }}>
             <Box sx={{ 
               background: "linear-gradient(135deg, #0f2027, #203a43)", 
               p: { xs: 2, md: 3 },
