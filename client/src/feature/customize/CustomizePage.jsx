@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Box, Typography, Button } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
 import PartSelector from "./components/PartSelector";
@@ -12,6 +12,7 @@ export default function CustomizePage() {
   const searchParams = useSearchParams();
   const carId = searchParams.get("carId");
 
+  const viewerRef = useRef(null); // Ref to access ThreeViewer functions
   const [selectedPart, setSelectedPart] = useState("body");
   const [selectedColor, setSelectedColor] = useState("#1e3a5f");
   
@@ -29,6 +30,10 @@ export default function CustomizePage() {
 
   // The "Current Build" state tracks all equipped modular parts
   const [currentBuild, setCurrentBuild] = useState({});
+
+  // Draft management state
+  const [designId, setDesignId] = useState(searchParams.get("designId") || null);
+  const [saveStatus, setSaveStatus] = useState("saved"); // 'saved', 'saving', 'error'
 
   const handlePartSelect = (category, url, slot) => {
     // If a specific slot is provided (e.g. "Front_Bumper"), use it.
@@ -51,6 +56,67 @@ export default function CustomizePage() {
   const spoilerOptions = modelData?.parts?.spoilers || [];
   const colors = modelData?.colors || [];
 
+  // Helper to package the entire customization into a single object
+  const captureDesignState = () => {
+    return {
+      carId: modelData?._id || carId,
+      paint: {
+        color: selectedColor,
+        finish: "glossy" // Default for now
+      },
+      modularParts: currentBuild,
+      wheels: wheels
+    };
+  };
+
+  // Function to send the current state to the backend
+  const saveDraft = async () => {
+    try {
+      setSaveStatus("saving");
+      const currentState = captureDesignState();
+      
+      // Capture thumbnail from 3D viewer
+      const thumbnail = viewerRef.current?.takeScreenshot();
+      
+      let response;
+      if (designId) {
+        // Update existing draft
+        response = await apiClient.put(`/designs/${designId}`, { 
+          state: currentState,
+          thumbnail: thumbnail 
+        });
+      } else {
+        // Create new draft
+        response = await apiClient.post("/designs", { 
+          name: `My ${modelData?.name || "Car"}`, 
+          state: currentState,
+          thumbnail: thumbnail
+        });
+        setDesignId(response.data._id); 
+      }
+      
+      setSaveStatus("saved");
+      console.log("[Auto-Save] Draft saved successfully:", response.data._id);
+    } catch (error) {
+      setSaveStatus("error");
+      console.error("[Auto-Save] Failed to save draft:", error);
+      // If it's a 401, user is likely logged out - we could redirect or just stop saving
+    }
+  };
+
+  // ── Auto-Save Engine ──────────────────────────────────────────────────────
+  useEffect(() => {
+    // Only auto-save if we have model data (initial load complete)
+    if (!modelData) return;
+
+    // Debounce: Wait 2 seconds of inactivity before saving
+    const timer = setTimeout(() => {
+      saveDraft();
+    }, 2000);
+
+    return () => clearTimeout(timer); // Reset timer if state changes again
+  }, [selectedColor, currentBuild, wheels, modelData]);
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -64,6 +130,28 @@ export default function CustomizePage() {
         if (model) {
           setModelData(model);
           setModelUrl(model.chassisUrl || model.modelUrl);
+
+          // ── Resume/Hydration Logic ──
+          if (designId) {
+            console.log("[Resume] Loading saved design:", designId);
+            try {
+              const designRes = await apiClient.get(`/designs/${designId}`);
+              const savedDesign = designRes.data;
+              
+              if (savedDesign && savedDesign.state) {
+                const { paint, wheels: savedWheels, modularParts } = savedDesign.state;
+                
+                // Apply saved state to editor
+                if (paint?.color) setSelectedColor(paint.color);
+                if (savedWheels) setWheels(savedWheels);
+                if (modularParts) setCurrentBuild(modularParts);
+                
+                console.log("[Resume] State hydrated successfully");
+              }
+            } catch (err) {
+              console.error("[Resume] Failed to load design:", err);
+            }
+          }
 
           // 2. Fetch Compatible Parts
           const partsRes = await apiClient.get(`/parts?carId=${model._id}`);
@@ -159,29 +247,72 @@ export default function CustomizePage() {
               flexShrink: 0,
             }}
           >
-            <Box>
-              <Typography variant="h5" sx={{ color: "#fff", fontWeight: 600, fontSize: "1.5rem" }}>
-                Design Studio
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#ccc", fontSize: "0.75rem" }}>
-                Configure your vehicle
-              </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Box>
+                <Typography variant="h5" sx={{ color: "#fff", fontWeight: 600, fontSize: "1.5rem" }}>
+                  Design Studio
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#ccc", fontSize: "0.75rem" }}>
+                  Configure your vehicle
+                </Typography>
+              </Box>
+              
+              {/* Save Status Indicator */}
+              <Box sx={{ 
+                ml: 2, 
+                px: 1.5, 
+                py: 0.5, 
+                borderRadius: "20px", 
+                backgroundColor: "rgba(0,0,0,0.3)",
+                display: "flex",
+                alignItems: "center",
+                gap: 1
+              }}>
+                <Box sx={{ 
+                  width: 8, 
+                  height: 8, 
+                  borderRadius: "50%", 
+                  backgroundColor: saveStatus === "saving" ? "#ffca28" : saveStatus === "error" ? "#f44336" : "#4caf50" 
+                }} />
+                <Typography variant="caption" sx={{ color: "#fff", fontSize: "0.65rem", fontWeight: 500 }}>
+                  {saveStatus === "saving" ? "Saving..." : saveStatus === "error" ? "Save Error" : "Draft Saved"}
+                </Typography>
+              </Box>
             </Box>
 
-            <Button
-              onClick={() => setIsChatOpen(true)}
-              variant="contained"
-              size="small"
-              sx={{
-                background: "linear-gradient(135deg, #0f2027, #2c5364)",
-                textTransform: "none",
-                "&:hover": { opacity: 0.9 },
-                py: 0.5,
-                px: 2,
-              }}
-            >
-              AI Assistant
-            </Button>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                onClick={() => saveDraft()}
+                variant="outlined"
+                size="small"
+                disabled={saveStatus === "saving"}
+                sx={{
+                  borderColor: "rgba(255,255,255,0.3)",
+                  color: "#fff",
+                  textTransform: "none",
+                  "&:hover": { borderColor: "#fff", background: "rgba(255,255,255,0.1)" },
+                  py: 0.5,
+                  px: 2,
+                }}
+              >
+                {saveStatus === "saving" ? "Saving..." : "Save Configuration"}
+              </Button>
+
+              <Button
+                onClick={() => setIsChatOpen(true)}
+                variant="contained"
+                size="small"
+                sx={{
+                  background: "linear-gradient(135deg, #0f2027, #2c5364)",
+                  textTransform: "none",
+                  "&:hover": { opacity: 0.9 },
+                  py: 0.5,
+                  px: 2,
+                }}
+              >
+                AI Assistant
+              </Button>
+            </Box>
           </Box>
 
           {/* Main Row - Takes remaining space */}
@@ -197,6 +328,7 @@ export default function CustomizePage() {
             {/* 3D Viewer */}
             <Box sx={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden" }}>
               <ThreeViewer
+                ref={viewerRef}
                 modelPath={modelUrl}
                 backgroundColor="transparent"
                 modelColor={selectedPart === "body" ? selectedColor : null}

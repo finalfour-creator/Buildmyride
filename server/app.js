@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import modelRoutes from "./routes/modelRoutes.js";
 import partRoutes from "./routes/partRoutes.js";
+import designRoutes from "./routes/designRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -20,7 +21,8 @@ app.use(
   })
 );
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -34,6 +36,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/models", modelRoutes);
 app.use("/api/parts", partRoutes);
+app.use("/api/designs", designRoutes);
 
 app.use(errorHandler);
 

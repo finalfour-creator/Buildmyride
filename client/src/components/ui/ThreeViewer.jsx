@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
@@ -265,16 +265,16 @@ function discoverSpoilerMesh(model) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function ThreeViewer({
+const ThreeViewer = forwardRef(({
   modelPath,
   backgroundColor = "#ffffff",
   modelColor = null,
-  wheelReplacements = {},   // { "front-left": "/url.glb" | null, ... }
-  spoilerReplacement = null, // "/url.glb" | null
-  currentBuild = {},        // { "Front_Bumper": "/url.glb", ... }
-  onWheelClick = null,      // (positionId: string) => void
+  wheelReplacements = {},
+  spoilerReplacement = null,
+  currentBuild = {},
+  onWheelClick = null,
   sx = {},
-}) {
+}, ref) => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -282,6 +282,18 @@ export default function ThreeViewer({
   const modelRef = useRef(null);
   const controlsRef = useRef(null);
   const animFrameRef = useRef(null);
+
+  // Expose functions to parent
+  useImperativeHandle(ref, () => ({
+    takeScreenshot: () => {
+      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        // Render one frame immediately to ensure buffer is fresh
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+        return rendererRef.current.domElement.toDataURL("image/png");
+      }
+      return null;
+    }
+  }));
 
   // Wheel-related refs
   const wheelMeshMapRef = useRef(new Map());       // positionId → original mesh
@@ -328,6 +340,7 @@ export default function ThreeViewer({
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: backgroundColor === "transparent",
+      preserveDrawingBuffer: true, // Allow screenshots
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -1039,4 +1052,6 @@ export default function ThreeViewer({
       )}
     </Box>
   );
-}
+});
+
+export default ThreeViewer;
