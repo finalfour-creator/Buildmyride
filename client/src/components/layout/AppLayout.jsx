@@ -1,6 +1,6 @@
 "use client";
 import { Box } from "@mui/material";
-import Navbar from "./Navbar";
+import Navbar from "./DashboardNav";
 import Sidebar from "./Sidebar";
 
 export default function AppLayout({ children }) {

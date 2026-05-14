@@ -21,17 +21,38 @@ import User from "../models/User.js";
 //   };
 // }
 
+
+
 export async function getUserByEmail(email) {
-  const user = await User.findOne({ email });
+  // const user = await User.findOne({ email });
+
+  const user = await User.findOne({ email }).select("name email password");
 
   if (!user) return null;
 
   return {
     id: user._id.toString(),
     email: user.email,
-    passwordHash: user.password, // assuming plain for now
+    password: user.password, // assuming plain for now
+    name:user.name
   };
 }
+
+
+// UPDATE (single user)
+export const updateUser = async (id, data) => {
+  return await User.findByIdAndUpdate(id, data, { new: true });
+};
+
+// READ (single user by ID)
+export const getUserById = async (id) => {
+  return await User.findById(id);
+};
+
+export const deleteUser = async (id) => {
+  return await User.findByIdAndDelete(id);
+};
+
 
 // CREATE
 // export const createUser = async (data) => {
@@ -57,3 +78,4 @@ export async function getUserByEmail(email) {
 // export const deleteUser = async (id) => {
 //   return await User.findByIdAndDelete(id);
 // };
+

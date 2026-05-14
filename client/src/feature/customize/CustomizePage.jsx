@@ -198,7 +198,7 @@ export default function CustomizePage() {
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        backgroundImage: "url('/images/garage2.jpg')",
+        backgroundImage: "url('/images/garage3.jpeg')",
         backgroundSize: "cover",
         backgroundPosition: "center 20%",
         backgroundRepeat: "no-repeat",
