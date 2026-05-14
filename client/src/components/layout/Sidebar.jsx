@@ -1,19 +1,15 @@
 "use client";
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import apiClient from '@/lib/axios';
+import { useSession } from 'next-auth/react';
 
 const mainNav = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/dashboard/builds', label: 'My Designs', badge: '7' },
-  { href: '/customize', label: '3D Studio' },
+  { href: '/configurator/dashboard', label: 'Dashboard' },
+  { href: '/configurator/designs', label: 'My Designs' },
+  { href: '/configurator/customization', label: '3D Studio' },
   { href: '/ar-view', label: 'AR Preview' },
-];
-
-const toolsNav = [
-  { href: '/ai-assistant', label: 'AI Assistant' },
-  { href: '/dashboard/parts', label: 'Part Library' },
-  { href: '/dashboard/colors', label: 'Color Picker' },
-  { href: '/dashboard/wheels', label: 'Wheel & Rim' },
 ];
 
 const accountNav = [
@@ -47,6 +43,17 @@ function NavItem({ href, icon, label, badge }) {
 }
 
 export default function Sidebar() {
+  const [designCount, setDesignCount] = useState(0);
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      apiClient.get("/designs").then(res => {
+        setDesignCount(res.data.length);
+      }).catch(err => console.error("Sidebar count fetch failed", err));
+    }
+  }, [status]);
+
   return (
     <aside style={{
       width: "260px",
@@ -54,38 +61,29 @@ export default function Sidebar() {
       left: 0,
       top: "70px",
       bottom: 0,
+      display: "flex",
+      flexDirection: "column",
       background: "#0f2027",
       overflowY: "auto",
       padding: "24px 16px",
       borderRight: "1px solid #2c5364"
     }}>
-      <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "#8a9aa8", margin: "0 0 12px 12px" }}>Main</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {mainNav.map((item) => <NavItem key={item.href} {...item} />)}
+        {mainNav.map((item) => (
+          <NavItem 
+            key={item.href} 
+            {...item} 
+            badge={item.label === 'My Designs' ? designCount.toString() : null} 
+          />
+        ))}
       </div>
+
+      <div style={{ flex: 1 }} />
 
       <div style={{ height: 1, background: "#2c5364", margin: "20px 0" }} />
 
-      <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "#8a9aa8", margin: "0 0 12px 12px" }}>Tools</p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {toolsNav.map((item) => <NavItem key={item.href} {...item} />)}
-      </div>
-
-      <div style={{ height: 1, background: "#2c5364", margin: "20px 0" }} />
-
-      <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "#8a9aa8", margin: "0 0 12px 12px" }}>Account</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {accountNav.map((item) => <NavItem key={item.href} {...item} />)}
-      </div>
-
-      <div style={{ marginTop: 32, padding: "16px 12px 0", borderTop: "1px solid #2c5364" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a9aa8", marginBottom: 8 }}>
-          <span>Storage</span>
-          <span>620 MB / 1 GB</span>
-        </div>
-        <div style={{ height: 4, background: "#2c5364", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: "62%", background: "#4a7c9c" }} />
-        </div>
       </div>
     </aside>
   );

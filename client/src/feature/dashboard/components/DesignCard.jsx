@@ -29,18 +29,29 @@ function CarSVG({ variant }) {
   return null;
 }
 
-export default function DesignCard({ model, date, colorDot, thumbVariant, tag, id }) {
+export default function DesignCard({ name, updatedAt, thumbnail, _id, state }) {
+  const dateStr = new Date(updatedAt).toLocaleDateString();
+  const carName = state?.carId?.split('_').join(' ') || "Custom Vehicle";
+
   return (
     <Box sx={{ background: "white", border: "1px solid #e8e0d6", overflow: "hidden" }}>
       <Box sx={{ position: "relative", height: 140, background: "#0f1a1f", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <CarSVG variant={thumbVariant} />
-        {tag && (
-          <Box sx={{ position: "absolute", top: 12, left: 12, padding: "2px 8px", fontSize: 9, fontWeight: 600, background: "#2c5364", color: "white" }}>
-            {tag}
-          </Box>
+        {thumbnail ? (
+          <img 
+            src={thumbnail} 
+            alt={name} 
+            style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+          />
+        ) : (
+          <CarSVG variant="civic" />
         )}
+        
+        <Box sx={{ position: "absolute", top: 12, left: 12, padding: "2px 8px", fontSize: 9, fontWeight: 600, background: "#2c5364", color: "white" }}>
+          3D
+        </Box>
+
         <Box sx={{ position: "absolute", bottom: 12, right: 12, display: "flex", gap: 1 }}>
-          <Link href={`/configurator/customization?id=${id}`}>
+          <Link href={`/configurator/customization?designId=${_id}`}>
             <button style={{ padding: "4px 12px", background: "rgba(0,0,0,0.75)", border: "none", color: "white", fontSize: 11, cursor: "pointer" }}>Open</button>
           </Link>
           <Link href="/ar-view">
@@ -49,10 +60,10 @@ export default function DesignCard({ model, date, colorDot, thumbVariant, tag, i
         </Box>
       </Box>
       <Box sx={{ p: 2 }}>
-        <Typography sx={{ fontWeight: 600, fontSize: 14, color: "#1a2a32", mb: 0.5 }}>{model}</Typography>
+        <Typography sx={{ fontWeight: 600, fontSize: 14, color: "#1a2a32", mb: 0.5 }}>{name}</Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography sx={{ fontSize: 11, color: "#8a9aa8" }}>{date}</Typography>
-          {colorDot && <Box sx={{ width: 12, height: 12, borderRadius: "50%", background: colorDot }} />}
+          <Typography sx={{ fontSize: 11, color: "#8a9aa8" }}>{carName}</Typography>
+          <Typography sx={{ fontSize: 11, color: "#8a9aa8", ml: "auto" }}>{dateStr}</Typography>
         </Box>
       </Box>
     </Box>

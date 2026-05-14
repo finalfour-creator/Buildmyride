@@ -1,51 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Box } from "@mui/material";
 import DesignCard from "@/feature/dashboard/components/DesignCard";
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import apiClient from "@/lib/axios";
+import { useSearchParams } from "next/navigation";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const [activeTab, setActiveTab] = useState("designs");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabParam || "designs");
+  const [designs, setDesigns] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ SIMPLE AND CORRECT
+  // Sync tab with URL param
+  useEffect(() => {
+    if (tabParam) setActiveTab(tabParam);
+  }, [tabParam]);
+
+  // ✅ FETCH REAL DESIGNS FROM DB
+  useEffect(() => {
+    if (status === "authenticated") {
+      const fetchDesigns = async () => {
+        try {
+          const res = await apiClient.get("/designs");
+          setDesigns(res.data);
+        } catch (error) {
+          console.error("Failed to fetch designs:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchDesigns();
+    }
+  }, [status]);
+
   const userName = session?.user?.name || "User";
 
-  if (status === "loading") {
-    return <h1 style={{ padding: 20 }}>Loading...</h1>;
+  if (status === "loading" || (status === "authenticated" && loading)) {
+    return <h1 style={{ padding: 20 }}>Loading your designs...</h1>;
   }
-
-  const savedDesigns = [
-    {
-      id: 1,
-      name: "Midnight Sports Edition",
-      car: "Honda Civic 2024",
-      lastEdited: "2 days ago",
-      color: "#1e3a5f",
-      thumbVariant: "civic",
-      tag: "3D",
-    },
-    {
-      id: 2,
-      name: "Urban Matte Black",
-      car: "Toyota Corolla Altis",
-      lastEdited: "5 days ago",
-      color: "#2d2d2d",
-      thumbVariant: "corolla",
-      tag: "AR",
-    },
-    {
-      id: 3,
-      name: "Desert Storm Rally",
-      car: "Suzuki Swift",
-      lastEdited: "1 week ago",
-      color: "#b87c4f",
-      thumbVariant: "cultus",
-      tag: "AI",
-    },
-  ];
 
   const recentActivity = [
     { id: 1, action: "Modified wheels on", car: "Honda Civic", time: "2 hours ago" },
@@ -55,7 +52,7 @@ export default function DashboardPage() {
   ];
 
   const stats = [
-    { label: "Total Designs", value: "12" },
+    { label: "Total Designs", value: designs.length.toString() },
     { label: "Hours Spent", value: "24.5" },
     { label: "AI Suggestions", value: "28" },
     { label: "AR Previews", value: "15" },
@@ -82,7 +79,7 @@ export default function DashboardPage() {
         <h2 style={{ fontSize: 20, fontWeight: 600, color: "#0f2027", marginBottom: 20 }}>
           Quick Actions
         </h2>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }, gap: 3 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(1, 1fr)", md: "repeat(3, 1fr)" }, gap: 3 }}>
           <Link href="/configurator/customization" style={{ textDecoration: "none" }}>
             <Box sx={{ background: "linear-gradient(135deg, #0f2027, #203a43)", p: 3, color: "white" }}>
               <h3>New Design</h3>
@@ -101,12 +98,6 @@ export default function DashboardPage() {
               <p>Get intelligent design recommendations</p>
             </Box>
           </Link>
-          <Link href="/gallery" style={{ textDecoration: "none" }}>
-            <Box sx={{ background: "linear-gradient(135deg, #1e3a5f, #0f2027)", p: 3, color: "white" }}>
-              <h3>Community</h3>
-              <p>Explore designs from others</p>
-            </Box>
-          </Link>
         </Box>
       </Box>
 
@@ -122,20 +113,28 @@ export default function DashboardPage() {
 
       {/* Content */}
       {activeTab === "designs" && (
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 3 }}>
-          {savedDesigns.map((design) => (
-            <DesignCard key={design.id} {...design} />
-          ))}
+        <Box>
+          {designs.length > 0 ? (
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 3 }}>
+              {designs.map((design) => (
+                <DesignCard key={design._id} {...design} />
+              ))}
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: "center", py: 10, background: "white", border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No designs yet</h3>
+              <p style={{ color: "#64748b", marginBottom: 24 }}>Start customizing your first vehicle design</p>
+              <Link href="/configurator/customization" style={{ padding: "12px 32px", background: "linear-gradient(135deg, #0f2027, #2c5364)", color: "white", textDecoration: "none", fontWeight: 600 }}>
+                Create New Design
+              </Link>
+            </Box>
+          )}
         </Box>
       )}
 
       {activeTab === "activity" && (
-        <Box>
-          {recentActivity.map((item) => (
-            <p key={item.id}>
-              {item.action} {item.car} - {item.time}
-            </p>
-          ))}
+        <Box sx={{ background: "white", border: "1px solid #e2e8f0", p: 4, textAlign: "center" }}>
+          <p style={{ color: "#64748b" }}>Recent activity will appear here as you work on your designs.</p>
         </Box>
       )}
 
