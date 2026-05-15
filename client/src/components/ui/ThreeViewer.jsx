@@ -17,14 +17,14 @@ function isBodyPaintMesh(meshName) {
   // Exclude patterns: things that should NOT be painted
   const excludePatterns = [
     "glass", "window", "windshield", "windscreen",
-    "light", "lamp", "headlight", "taillight", "fog", "indicator", "signal",
-    "interior", "seat", "dashboard", "dash", "steering", "console",
-    "tyre", "tire", "wheel", "rim", "brake", "disc",
-    "chrome", "emblem", "logo", "badge", "plate", "number",
-    "mirror", "wiper", "antenna", "grille", "grill",
-    "rubber", "seal", "trim",
-    "exhaust", "pipe", "muffler",
-    "underbody", "undercarriage", "chassis",
+    "light", "lamp", "headlight", "taillight", "fog", "indicator", "signal", "lens",
+    "interior", "seat", "dashboard", "dash", "steering", "console", "pedal", "knob",
+    "tyre", "tire", "wheel", "rim", "brake", "disc", "caliper",
+    "chrome", "emblem", "logo", "badge", "plate", "number", "text",
+    "mirror_glass", "wiper", "antenna", "grille", "grill", "mesh",
+    "rubber", "seal", "trim", "molding", "plastic", "carbon",
+    "exhaust", "pipe", "muffler", "tip",
+    "underbody", "undercarriage", "chassis", "frame", "suspension", "engine", "radiator", "motor",
   ];
 
   for (const pattern of excludePatterns) {
@@ -35,17 +35,36 @@ function isBodyPaintMesh(meshName) {
   const includePatterns = [
     "body", "door", "hood", "bonnet", "fender", "bumper",
     "roof", "trunk", "boot", "panel", "quarter", "pillar",
-    "skirt", "spoiler", "wing", "paint",
+    "skirt", "spoiler", "wing", "paint", "exterior", "shell",
   ];
 
   for (const pattern of includePatterns) {
     if (n.includes(pattern)) return true;
   }
 
-  // If no pattern matched, include it by default (many GLTF models
-  // use generic names like "Mesh_001" for body panels)
-  // But ONLY if the name doesn't look like an excluded component
+  // If no pattern matched, we perform a "generic" check.
+  // Many models use names like "Mesh_001". We allow these if they are large enough,
+  // but for simplicity in this helper, we'll allow generic names if they weren't excluded.
   return true;
+}
+
+/**
+ * Apply color to all paintable meshes within a THREE.Object3D.
+ */
+function applyColorToPaintableMeshes(object, color) {
+  if (!object || !color) return;
+  object.traverse((node) => {
+    if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach((m) => {
+        if (m.color) {
+          // If the material has a color property, set it.
+          // Note: Some models use textures for color. Setting color might tint them.
+          m.color.set(color);
+        }
+      });
+    }
+  });
 }
 
 /**
@@ -566,12 +585,7 @@ const ThreeViewer = forwardRef(({
 
         // Apply initial color (body meshes only)
         if (modelColor) {
-          model.traverse((node) => {
-            if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
-              const mats = Array.isArray(node.material) ? node.material : [node.material];
-              mats.forEach((m) => m.color && m.color.set(modelColor));
-            }
-          });
+          applyColorToPaintableMeshes(model, modelColor);
         }
 
         if (controlsRef.current) {
@@ -597,15 +611,23 @@ const ThreeViewer = forwardRef(({
     };
   }, [modelPath]);
 
-  // ── Color updates (body meshes only) ───────────────────────────────────────
   useEffect(() => {
-    if (!modelColor || !modelRef.current) return;
-    modelRef.current.traverse((node) => {
-      if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
-        const mats = Array.isArray(node.material) ? node.material : [node.material];
-        mats.forEach((m) => m.color && m.color.set(modelColor));
-      }
+    if (!modelColor) return;
+
+    // 1. Apply to main chassis
+    if (modelRef.current) {
+      applyColorToPaintableMeshes(modelRef.current, modelColor);
+    }
+
+    // 2. Apply to modular parts (Bumpers, Hoods, etc.)
+    modularPartsRef.current.forEach((part) => {
+      applyColorToPaintableMeshes(part, modelColor);
     });
+
+    // 3. Apply to custom spoiler
+    if (customSpoilerRef.current) {
+      applyColorToPaintableMeshes(customSpoilerRef.current, modelColor);
+    }
   }, [modelColor]);
 
   // ── Wheel replacement effect ──────────────────────────────────────────────
@@ -828,11 +850,20 @@ const ThreeViewer = forwardRef(({
           newPart.scale.set(1, 1, 1);
 
           modularPartsRef.current.set(slotKey, newPart);
+
+          // Apply current body paint to the new modular part
+          if (modelColor) {
+            applyColorToPaintableMeshes(newPart, modelColor);
+          }
         } else {
           console.warn(`[Modular] No anchor point found for slot: ${slotKey}. Part may not appear correctly.`);
           // As a fallback, just add to the model center
           modelRef.current.add(newPart);
           modularPartsRef.current.set(slotKey, newPart);
+          
+          if (modelColor) {
+            applyColorToPaintableMeshes(newPart, modelColor);
+          }
         }
       });
     });
@@ -986,6 +1017,12 @@ const ThreeViewer = forwardRef(({
         customSpoiler.position.z += zShift;
 
         customSpoilerRef.current = customSpoiler;
+        
+        // Apply current body paint to the new spoiler
+        if (modelColor) {
+          applyColorToPaintableMeshes(customSpoiler, modelColor);
+        }
+        
         console.log(`Spoiler placed on ${originalMesh.name} at Y: ${customSpoiler.position.y}`);
       },
       undefined,

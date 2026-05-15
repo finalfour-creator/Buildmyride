@@ -1,60 +1,108 @@
 "use client";
-import { Box, Typography, Button } from "@mui/material";
+import { Box, Typography, Button, Tooltip } from "@mui/material";
+
+const DEFAULT_PALETTE = [
+  { name: "Obsidian Black", value: "#0a0a0a" },
+  { name: "Pearl White", value: "#f8f9fa" },
+  { name: "Nardo Grey", value: "#54585a" },
+  { name: "Soul Red", value: "#9b111e" },
+  { name: "Racing Blue", value: "#003366" },
+  { name: "Forest Green", value: "#013220" },
+  { name: "Sunburst Orange", value: "#cc5500" },
+  { name: "Silver Frost", value: "#c0c0c0" },
+];
 
 export default function BodyOptions({
   selectedColor,
   setSelectedColor,
-  colorPalette,
+  colorPalette = [],
 }) {
+  // Use passed palette if available, otherwise use defaults
+  const displayPalette = colorPalette.length > 0 
+    ? colorPalette.map(c => typeof c === 'string' ? { value: c } : c)
+    : DEFAULT_PALETTE;
+
   return (
     <Box sx={{
-      background: "#0f2027",
-      border: "1px solid #2c5364",
-      p: 2,
+      p: 2.5,
       display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      flexWrap: "wrap",
-      gap: 2,
+      flexDirection: "column",
+      gap: 3,
     }}>
       <Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#e2e8f0", mb: 1, letterSpacing: "0.5px" }}>
-          PAINT COLORS
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "#8a9aa8", mb: 1.5, display: "block", letterSpacing: "1px" }}>
+          PRESET COLORS
         </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-          {colorPalette.map((color, i) => (
-            <Box
-              key={i}
-              onClick={() => setSelectedColor(color)}
-              sx={{
-                width: 32,
-                height: 32,
-                background: color,
-                border: selectedColor === color ? "2px solid #2c5364" : "1px solid #2c5364",
-                cursor: "pointer",
-                transition: "transform 0.2s",
-                "&:hover": { transform: "scale(1.05)" },
-              }}
-            />
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+          {displayPalette.map((color, i) => (
+            <Tooltip title={color.name || ""} key={i}>
+              <Box
+                onClick={() => setSelectedColor(color.value)}
+                sx={{
+                  width: 38,
+                  height: 38,
+                  background: color.value,
+                  border: selectedColor === color.value ? "3px solid #fff" : "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: selectedColor === color.value ? "0 0 10px rgba(255,255,255,0.3)" : "none",
+                  "&:hover": { transform: "translateY(-2px)", borderColor: "rgba(255,255,255,0.5)" },
+                }}
+              />
+            </Tooltip>
           ))}
+        </Box>
+      </Box>
+
+      <Box>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "#8a9aa8", mb: 1.5, display: "block", letterSpacing: "1px" }}>
+          CUSTOM COLOR
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box
+            component="input"
+            type="color"
+            value={selectedColor || "#000000"}
+            onChange={(e) => setSelectedColor(e.target.value)}
+            sx={{
+              width: 50,
+              height: 40,
+              border: "none",
+              padding: 0,
+              background: "none",
+              cursor: "pointer",
+              "&::-webkit-color-swatch-wrapper": { padding: 0 },
+              "&::-webkit-color-swatch": { border: "1px solid #2c5364", borderRadius: "4px" }
+            }}
+          />
+          <Typography sx={{ color: "#fff", fontSize: "0.8rem", fontFamily: "monospace", opacity: 0.7 }}>
+            {selectedColor?.toUpperCase()}
+          </Typography>
         </Box>
       </Box>
 
       <Button
         variant="contained"
+        fullWidth
         sx={{
-          background: "linear-gradient(135deg, #0f2027, #2c5364)",
-          px: 3,
-          py: 1,
-          borderRadius: 0,
+          mt: 1,
+          background: "linear-gradient(135deg, #2c5364, #203a43)",
+          color: "#fff",
+          py: 1.2,
+          borderRadius: "4px",
           textTransform: "none",
           fontWeight: 600,
-          fontSize: "0.8rem",
-          "&:hover": { opacity: 0.9 },
-          whiteSpace: "nowrap",
+          fontSize: "0.85rem",
+          letterSpacing: 0.5,
+          border: "1px solid rgba(255,255,255,0.1)",
+          "&:hover": { 
+            background: "linear-gradient(135deg, #366174, #2a4c58)",
+            borderColor: "rgba(255,255,255,0.2)" 
+          },
         }}
       >
-        SAVE CONFIGURATION
+        LOCK PAINT COLOR
       </Button>
     </Box>
   );

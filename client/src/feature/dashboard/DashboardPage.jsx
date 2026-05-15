@@ -60,7 +60,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <Box sx={{ maxWidth: 1400, margin: "0 auto", px: { xs: 2, md: 4 } }}>
+    <Box sx={{ maxWidth: 1400, margin: "0 auto", px: { xs: 2, md: 4 }, py: 4 }}>
       {/* Welcome Section */}
       <Box sx={{ background: "white", border: "1px solid #e2e8f0", p: { xs: 3, md: 4 }, mb: 5 }}>
         <h1 style={{ fontSize: 24, fontWeight: 500, color: "#1a2a32", marginBottom: 6 }}>

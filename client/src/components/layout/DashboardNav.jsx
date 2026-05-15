@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -9,7 +8,6 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Button,
   Box,
 } from "@mui/material";
 
@@ -33,7 +31,6 @@ export default function Navbar() {
     setAnchorEl(null);
   };
 
-  // ✅ FIXED LOGOUT - redirects to /auth
   const handleLogout = async () => {
     handleClose();
     await signOut({ redirect: false });
@@ -73,35 +70,8 @@ export default function Navbar() {
           BUILDMYRIDE
         </Typography>
 
-        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-          {/* New Design */}
-          <Button
-            component={Link}
-            href="/customize"
-            sx={{
-              color: "#e2e8f0",
-              fontWeight: 500,
-              "&:hover": { color: "#ffffff" },
-            }}
-          >
-            New Design
-          </Button>
-
-          {/* Logout Button */}
-          <Button
-            onClick={handleLogout}
-            sx={{
-              color: "#dc2626",
-              fontWeight: 500,
-              "&:hover": {
-                backgroundColor: "rgba(220,38,38,0.08)",
-              },
-            }}
-          >
-            Logout
-          </Button>
-
-          {/* Avatar */}
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          {/* Avatar - Now the primary interaction point */}
           <IconButton onClick={handleClick} sx={{ p: 0 }}>
             <Avatar
               sx={{ bgcolor: "#2c5364", width: 36, height: 36 }}

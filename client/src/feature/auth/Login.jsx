@@ -13,8 +13,9 @@ import Input from "./components/Input";
 import PrimaryButton from "./components/PrimaryButton";
 import GoogleIcon from "./components/GoogleIcon";
 
-const ACCENT = "#22a7f0";
-const SLIDING_BG = "linear-gradient(135deg, #22a7f0 0%, #1a1a1d 100%)";
+// ✅ UPDATED COLORS
+const ACCENT = "#2c5364";
+const SLIDING_BG = "linear-gradient(135deg, #0f2027, #203a43, #2c5364)";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -156,9 +157,6 @@ export default function LoginPage() {
             <Typography sx={{ fontSize: 13, color: "#888", px: 1 }}>or</Typography>
           </Divider>
 
-          <Button fullWidth startIcon={<GoogleIcon />} sx={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, color: "#fff", fontWeight: 600, fontSize: 13, py: 1.5, "&:hover": { background: "rgba(255,255,255,0.1)" } }}>
-            Continue with Google
-          </Button>
         </Box>
 
         {/* CREATE ACCOUNT PANEL */}
@@ -196,7 +194,7 @@ export default function LoginPage() {
         </Box>
 
         {/* SLIDING PANEL */}
-        <Box sx={{ position: "absolute", top: 0, left: isToggled ? "0%" : "50%", width: "50%", height: "100%", zIndex: 10, transition: "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)", background: SLIDING_BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", px: "60px", textAlign: "center", color: "#fff", boxShadow: isToggled ? "20px 0 50px rgba(34,167,240,0.3)" : "-20px 0 50px rgba(34,167,240,0.3)" }}>
+        <Box sx={{ position: "absolute", top: 0, left: isToggled ? "0%" : "50%", width: "50%", height: "100%", zIndex: 10, transition: "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)", background: SLIDING_BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", px: "60px", textAlign: "center", color: "#fff", boxShadow: isToggled ? "20px 0 50px rgba(15,32,39,0.3)" : "-20px 0 50px rgba(15,32,39,0.3)" }}>
           <Typography variant="h4" fontWeight={700} mb={2}>{isToggled ? "Already a Member?" : "Hello, Friend!"}</Typography>
           <Typography sx={{ fontSize: 14, color: "rgba(255,255,255,0.8)", mb: 4 }}>{isToggled ? "To keep connected with us please login with your personal info" : "Enter your personal details and start your journey with us"}</Typography>
           <PrimaryButton inverted onClick={() => setIsToggled(!isToggled)}>{isToggled ? "SIGN IN" : "SIGN UP"}</PrimaryButton>

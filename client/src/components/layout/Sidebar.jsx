@@ -6,10 +6,17 @@ import apiClient from '@/lib/axios';
 import { useSession } from 'next-auth/react';
 
 const mainNav = [
-  { href: '/configurator/dashboard', label: 'Dashboard' },
-  { href: '/configurator/designs', label: 'My Designs' },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/configurator/designs', label: 'My Designs', badge: '7' },
   { href: '/configurator/customization', label: '3D Studio' },
   { href: '/ar-view', label: 'AR Preview' },
+];
+
+const toolsNav = [
+  { href: '/ai-assistant', label: 'AI Assistant' },
+  { href: '/dashboard/parts', label: 'Part Library' },
+  { href: '/dashboard/colors', label: 'Color Picker' },
+  { href: '/dashboard/wheels', label: 'Wheel & Rim' },
 ];
 
 const accountNav = [
@@ -70,10 +77,10 @@ export default function Sidebar() {
     }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {mainNav.map((item) => (
-          <NavItem 
-            key={item.href} 
-            {...item} 
-            badge={item.label === 'My Designs' ? designCount.toString() : null} 
+          <NavItem
+            key={item.href}
+            {...item}
+            badge={item.label === 'My Designs' ? designCount.toString() : null}
           />
         ))}
       </div>
