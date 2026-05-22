@@ -9,6 +9,7 @@ import userRoutes from "./routes/userRoutes.js";
 import modelRoutes from "./routes/modelRoutes.js";
 import partRoutes from "./routes/partRoutes.js";
 import designRoutes from "./routes/designRoutes.js";
+import arPreviewRoutes from "./routes/arPreviewRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -37,6 +38,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/models", modelRoutes);
 app.use("/api/parts", partRoutes);
 app.use("/api/designs", designRoutes);
+app.use("/api/ar-previews", arPreviewRoutes);
 
 app.use(errorHandler);
 
