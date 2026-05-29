@@ -2,6 +2,7 @@
  * YOLOv8 car detection in the browser via ONNX Runtime Web.
  * Model: place yolov8n.onnx in public/models/ (see public/models/README.md)
  */
+import { getOrt } from "./onnxSetup";
 
 export const YOLO_MODEL_URL = "/models/yolov8n.onnx";
 export const YOLO_INPUT_SIZE = 640;
@@ -12,6 +13,10 @@ const IOU_THRESHOLD = 0.45;
 
 let sessionPromise = null;
 let modelAvailable = null;
+
+// Reused across inference calls — avoids per-call allocation and GC pressure
+let _prepCanvas = null, _prepCtx = null;
+let _float32Buf = null; // Float32Array(3 × 640 × 640)
 
 export async function checkYoloModelAvailable() {
   if (modelAvailable !== null) return modelAvailable;
@@ -27,12 +32,11 @@ export async function checkYoloModelAvailable() {
 async function getSession() {
   if (!sessionPromise) {
     sessionPromise = (async () => {
-      const ort = await import("onnxruntime-web");
-      ort.env.wasm.wasmPaths =
-        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/";
-
+      const ort = await getOrt(); // shared init — no duplicate initWasm()
       return ort.InferenceSession.create(YOLO_MODEL_URL, {
-        executionProviders: ["wasm"],
+        executionProviders: ["webgpu", "webgl", "wasm"],
+        graphOptimizationLevel: "all",
+        enableMemPattern: true,
       });
     })();
   }
@@ -40,24 +44,25 @@ async function getSession() {
 }
 
 function preprocessVideoFrame(video, size = YOLO_INPUT_SIZE) {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(video, 0, 0, size, size);
-  const { data } = ctx.getImageData(0, 0, size, size);
+  if (!_prepCanvas) {
+    _prepCanvas = document.createElement("canvas");
+    _prepCanvas.width  = size;
+    _prepCanvas.height = size;
+    _prepCtx = _prepCanvas.getContext("2d", { willReadFrequently: true });
+  }
+  if (!_float32Buf) _float32Buf = new Float32Array(3 * size * size);
 
-  const float32Data = new Float32Array(3 * size * size);
-  for (let i = 0; i < size * size; i++) {
-    const r = data[i * 4] / 255;
-    const g = data[i * 4 + 1] / 255;
-    const b = data[i * 4 + 2] / 255;
-    float32Data[i] = r;
-    float32Data[size * size + i] = g;
-    float32Data[2 * size * size + i] = b;
+  _prepCtx.drawImage(video, 0, 0, size, size);
+  const { data } = _prepCtx.getImageData(0, 0, size, size);
+  const N = size * size;
+
+  for (let i = 0; i < N; i++) {
+    _float32Buf[i]         = data[i * 4]     / 255;
+    _float32Buf[N + i]     = data[i * 4 + 1] / 255;
+    _float32Buf[N * 2 + i] = data[i * 4 + 2] / 255;
   }
 
-  return float32Data;
+  return _float32Buf;
 }
 
 function iou(boxA, boxB) {
@@ -155,8 +160,7 @@ export async function detectCarInVideoFrame(video) {
   const hasModel = await checkYoloModelAvailable();
   if (!hasModel) return null;
 
-  const session = await getSession();
-  const ort = await import("onnxruntime-web");
+  const [session, ort] = await Promise.all([getSession(), getOrt()]);
   const inputData = preprocessVideoFrame(video);
   const inputTensor = new ort.Tensor("float32", inputData, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]);
 
@@ -170,4 +174,6 @@ export async function detectCarInVideoFrame(video) {
 export function resetYoloSession() {
   sessionPromise = null;
   modelAvailable = null;
+  _prepCanvas = null; _prepCtx = null;
+  _float32Buf = null;
 }

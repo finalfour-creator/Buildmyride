@@ -34,10 +34,40 @@ export default function BodyOptions({
           PRESET COLORS
         </Typography>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+          {/* No-paint swatch — clears color and returns to green detection mode */}
+          <Tooltip title="No paint (show detection)">
+            <Box
+              onClick={() => setSelectedColor(null)}
+              sx={{
+                width: 38,
+                height: 38,
+                border: selectedColor == null ? "3px solid #fff" : "1px solid rgba(255,255,255,0.15)",
+                borderRadius: "4px",
+                cursor: "pointer",
+                position: "relative",
+                overflow: "hidden",
+                background: "#111",
+                transition: "all 0.2s",
+                boxShadow: selectedColor == null ? "0 0 10px rgba(255,255,255,0.3)" : "none",
+                "&:hover": { borderColor: "rgba(255,255,255,0.5)" },
+                // Red diagonal strikethrough
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "linear-gradient(to bottom right, transparent calc(50% - 1px), #f44336 calc(50% - 1px), #f44336 calc(50% + 1px), transparent calc(50% + 1px))",
+                },
+              }}
+            />
+          </Tooltip>
+
           {displayPalette.map((color, i) => (
             <Tooltip title={color.name || ""} key={i}>
               <Box
-                onClick={() => setSelectedColor(color.value)}
+                onClick={() =>
+                  setSelectedColor(selectedColor === color.value ? null : color.value)
+                }
                 sx={{
                   width: 38,
                   height: 38,
@@ -73,11 +103,11 @@ export default function BodyOptions({
               background: "none",
               cursor: "pointer",
               "&::-webkit-color-swatch-wrapper": { padding: 0 },
-              "&::-webkit-color-swatch": { border: "1px solid #2c5364", borderRadius: "4px" }
+              "&::-webkit-color-swatch": { border: "1px solid #2c5364", borderRadius: "4px" },
             }}
           />
           <Typography sx={{ color: "#fff", fontSize: "0.8rem", fontFamily: "monospace", opacity: 0.7 }}>
-            {selectedColor?.toUpperCase()}
+            {selectedColor ? selectedColor.toUpperCase() : "No paint"}
           </Typography>
         </Box>
       </Box>

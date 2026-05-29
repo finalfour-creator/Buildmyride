@@ -1,6 +1,6 @@
 """
-Export YOLOv8 nano to ONNX for AR Preview (browser).
-Run from this folder so yolov8n.onnx is created here.
+Export YOLOv8 models to ONNX for AR Preview (browser).
+Run from this folder:
 
   pip install ultralytics
   py -3.11 export.py
@@ -8,8 +8,15 @@ Run from this folder so yolov8n.onnx is created here.
 
 from ultralytics import YOLO
 
-model = YOLO("yolov8n.pt")
+# --- Detection model (bounding box) ---
+print("Exporting yolov8n detection model...")
+YOLO("yolov8n.pt").export(format="onnx", imgsz=640, opset=12)
+print("  → yolov8n.onnx done")
 
-model.export(format="onnx", imgsz=640)
+# --- Segmentation model (pixel mask) ---
+# Downloads yolov8n-seg.pt automatically on first run (~6 MB)
+print("Exporting yolov8n-seg segmentation model...")
+YOLO("yolov8n-seg.pt").export(format="onnx", imgsz=640, opset=12)
+print("  → yolov8n-seg.onnx done")
 
-print("Done. Ensure yolov8n.onnx is in this folder, then restart: npm run dev")
+print("\nDone! Restart the dev server: npm run dev")

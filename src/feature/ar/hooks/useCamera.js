@@ -97,21 +97,34 @@ async function waitForVideoElement(videoRef) {
 }
 
 /**
- * Phase 2: live camera for AR Preview (mobile-safe).
+ * Stop hardware tracks after a delay.
+ * Calling track.stop() instantly on unmount confuses the Windows camera driver
+ * (device shows as hidden with Code 45) because the USB/internal bus doesn't
+ * get enough time to reset before the next getUserMedia call.
+ * 800 ms is enough for the driver to release cleanly on integrated webcams.
+ */
+function releaseTracksGracefully(tracks, delayMs = 800) {
+  if (!tracks?.length) return;
+  setTimeout(() => tracks.forEach((t) => t.stop()), delayMs);
+}
+
+/**
+ * Live camera hook for AR Preview (mobile-safe, driver-friendly).
  */
 export default function useCamera() {
-  const videoRef = useRef(null);
+  const videoRef  = useRef(null);
   const streamRef = useRef(null);
   const [status, setStatus] = useState("idle");
-  const [error, setError] = useState(null);
+  const [error, setError]   = useState(null);
 
+  // User-visible stop: clears UI immediately, releases hardware after a short delay
+  // so the driver has time to close the stream before any new getUserMedia.
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    const tracks = streamRef.current?.getTracks() ?? [];
     streamRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (videoRef.current) videoRef.current.srcObject = null;
     setStatus("idle");
+    releaseTracksGracefully(tracks, 300); // 300 ms is enough for a manual stop
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -133,7 +146,15 @@ export default function useCamera() {
     }
 
     try {
-      stopCamera();
+      // Release any previous stream and wait for the driver to settle
+      // before requesting a new getUserMedia — prevents NotReadableError.
+      if (streamRef.current) {
+        const old = streamRef.current.getTracks();
+        streamRef.current = null;
+        if (videoRef.current) videoRef.current.srcObject = null;
+        releaseTracksGracefully(old, 0); // stop immediately, then wait below
+        await new Promise((r) => setTimeout(r, 350));
+      }
 
       const video = await waitForVideoElement(videoRef);
       if (!video) {
@@ -166,11 +187,24 @@ export default function useCamera() {
       console.error("[AR Camera]", err);
       setError(getCameraErrorMessage(err));
       setStatus("error");
-      stopCamera();
+      // Graceful cleanup on error — don't hammer the driver
+      const tracks = streamRef.current?.getTracks() ?? [];
+      streamRef.current = null;
+      releaseTracksGracefully(tracks, 300);
     }
-  }, [stopCamera]);
+  }, []); // no deps — stopCamera logic inlined above to avoid dep cycle
 
-  useEffect(() => () => stopCamera(), [stopCamera]);
+  // On unmount (HMR reload, page nav, React Strict Mode double-mount):
+  // release tracks slowly so the Windows driver can settle.
+  // 800 ms prevents Code 45 "device not connected" in Device Manager.
+  useEffect(() => {
+    return () => {
+      const tracks = streamRef.current?.getTracks() ?? [];
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      releaseTracksGracefully(tracks, 800);
+    };
+  }, []); // empty deps — fires exactly once, on real unmount
 
   return {
     videoRef,

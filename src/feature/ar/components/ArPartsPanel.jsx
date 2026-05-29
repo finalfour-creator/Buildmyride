@@ -1,109 +1,34 @@
 "use client";
 
-import {
-  Box,
-  Typography,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  CircularProgress,
-} from "@mui/material";
+import { Box, Typography, Button } from "@mui/material";
+import { PART_CLASSES, PART_COLORS } from "../lib/yoloCarParts";
 import BodyOptions from "@/feature/customize/components/BodyOptions";
-import Wheel1Options from "@/feature/customize/components/Wheel1Options";
-import ModularPartOptions from "@/feature/customize/components/ModularPartOptions";
 
-const WHEEL_CATEGORY_IDS = ["wheels", "wheel", "rims"];
-
+/**
+ * Right-side panel with two detection modes:
+ *
+ *  "car"   — whole-car segmentation (YOLOv8-seg).
+ *            Shows the colour picker; the selected colour is painted over
+ *            the full car mask in real time.
+ *
+ *  "parts" — per-part detection (custom YOLOv8-pt).
+ *            Shows a button for every detectable part; clicking one
+ *            highlights that part's bounding box in the overlay.
+ */
 export default function ArPartsPanel({
-  categories,
-  grouped,
-  totalCount,
-  loading,
-  error,
-  selectedCategory,
-  onSelectCategory,
-  arBuild,
-  onPartSelect,
+  mode,
+  setMode,
   selectedColor,
   setSelectedColor,
-  wheels,
-  setWheels,
-  activeWheelPosition,
+  selectedPart,
+  setSelectedPart,
 }) {
-  const buildUrlsForHighlight = Object.fromEntries(
-    Object.entries(arBuild).map(([key, val]) => [
-      key,
-      typeof val === "string" ? val : val?.modelUrl,
-    ])
-  );
-
-  const renderCategoryContent = (part) => {
-    if (part.id === "body") {
-      return (
-        <BodyOptions
-          selectedColor={selectedColor}
-          setSelectedColor={setSelectedColor}
-        />
-      );
-    }
-
-    if (WHEEL_CATEGORY_IDS.includes(part.id)) {
-      const wheelOptions =
-        grouped.wheels || grouped.wheel || grouped.rims || [];
-      return (
-        <Wheel1Options
-          activeWheelPosition={activeWheelPosition}
-          wheels={wheels}
-          wheelOptions={wheelOptions}
-          setWheels={setWheels}
-          onApplyAllWheels={(url) => {
-            setWheels({
-              "front-left": url,
-              "front-right": url,
-              "rear-left": url,
-              "rear-right": url,
-            });
-          }}
-        />
-      );
-    }
-
-    const categoryData =
-      grouped[part.id] ||
-      Object.values(grouped).find(
-        (list) => list[0]?.category?.toLowerCase() === part.id
-      );
-
-    if (categoryData?.length) {
-      return (
-        <ModularPartOptions
-          category={part.name}
-          options={categoryData}
-          currentBuild={buildUrlsForHighlight}
-          onSelect={(url, slot) => {
-            const meta = url
-              ? categoryData.find((p) => p.modelUrl === url)
-              : null;
-            onPartSelect(part.id, url, slot, meta);
-          }}
-        />
-      );
-    }
-
-    return (
-      <Typography sx={{ p: 2, color: "#888", fontSize: 13 }}>
-        No parts in this category.
-      </Typography>
-    );
-  };
-
   return (
     <Box
       sx={{
         width: { xs: "100%", md: 320 },
         flexShrink: 0,
-        height: { xs: "38vh", md: "100%" },
-        maxHeight: { xs: "42vh", md: "none" },
+        height: { xs: "42vh", md: "100%" },
         display: "flex",
         flexDirection: "column",
         bgcolor: "#0f2027",
@@ -111,80 +36,160 @@ export default function ArPartsPanel({
         borderTop: { xs: "1px solid #2c5364", md: "none" },
       }}
     >
-      <Box sx={{ p: 2, borderBottom: "1px solid #2c5364" }}>
+      {/* ── Header ── */}
+      <Box sx={{ p: 2, borderBottom: "1px solid #2c5364", flexShrink: 0 }}>
         <Typography
           variant="caption"
-          sx={{ color: "#8a9aa8", letterSpacing: 1, fontWeight: 700, display: "block" }}
+          sx={{ color: "#8a9aa8", letterSpacing: 1, fontWeight: 700, display: "block", mb: 1.5 }}
         >
-          AR PARTS — FULL CATALOG
+          DETECTION MODE
         </Typography>
-        {!loading && !error && (
-          <Typography variant="caption" sx={{ color: "#64748b" }}>
-            {totalCount} parts · tap to apply on detected car
-          </Typography>
-        )}
+
+        {/* Mode toggle */}
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button
+            size="small"
+            fullWidth
+            onClick={() => setMode("car")}
+            variant={mode === "car" ? "contained" : "outlined"}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: "0.78rem",
+              ...(mode === "car"
+                ? {
+                    background: "linear-gradient(135deg, #0f2027, #2c5364)",
+                    color: "#00d25a",
+                    border: "1px solid #00d25a44",
+                  }
+                : {
+                    color: "#64748b",
+                    borderColor: "#2c5364",
+                    "&:hover": { borderColor: "#00d25a66", color: "#00d25a" },
+                  }),
+            }}
+          >
+            ● Whole Car
+          </Button>
+
+          <Button
+            size="small"
+            fullWidth
+            onClick={() => setMode("parts")}
+            variant={mode === "parts" ? "contained" : "outlined"}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: "0.78rem",
+              ...(mode === "parts"
+                ? {
+                    background: "linear-gradient(135deg, #0f2027, #2c5364)",
+                    color: "#ff6b35",
+                    border: "1px solid #ff6b3544",
+                  }
+                : {
+                    color: "#64748b",
+                    borderColor: "#2c5364",
+                    "&:hover": { borderColor: "#ff6b3566", color: "#ff6b35" },
+                  }),
+            }}
+          >
+            ▣ Car Parts
+          </Button>
+        </Box>
       </Box>
 
+      {/* ── Scrollable content ── */}
       <Box sx={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-        {loading && (
-          <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
-            <CircularProgress size={28} sx={{ color: "#2c5364" }} />
-          </Box>
+
+        {/* Whole Car — colour picker */}
+        {mode === "car" && (
+          <BodyOptions
+            selectedColor={selectedColor}
+            setSelectedColor={setSelectedColor}
+          />
         )}
 
-        {error && (
-          <Typography sx={{ p: 2, color: "#f44336", fontSize: 13 }}>{error}</Typography>
-        )}
-
-        {!loading &&
-          !error &&
-          categories.map((cat) => (
-            <Accordion
-              key={cat.id}
-              expanded={selectedCategory === cat.id}
-              onChange={() => onSelectCategory(cat.id)}
-              sx={{
-                background: "transparent",
-                color: "#fff",
-                borderBottom: "1px solid rgba(44, 83, 100, 0.3)",
-                boxShadow: "none",
-                "&:before": { display: "none" },
-                "&.Mui-expanded": { margin: 0 },
-              }}
+        {/* Car Parts — part selector */}
+        {mode === "parts" && (
+          <Box sx={{ p: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#8a9aa8", letterSpacing: 1, fontWeight: 700, display: "block", mb: 1 }}
             >
-              <AccordionSummary
-                expandIcon={
-                  <Typography sx={{ color: "#2c5364", fontSize: 12 }}>▼</Typography>
-                }
+              SELECT A PART TO HIGHLIGHT
+            </Typography>
+
+            <Typography variant="caption" sx={{ color: "#64748b", display: "block", mb: 2 }}>
+              Detected parts appear with coloured boxes.
+              Tap one to highlight it.
+            </Typography>
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {PART_CLASSES.map((name, i) => {
+                const color   = PART_COLORS[i % PART_COLORS.length];
+                const active  = selectedPart === name;
+                return (
+                  <Button
+                    key={name}
+                    size="small"
+                    onClick={() => setSelectedPart(active ? null : name)}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: active ? 700 : 400,
+                      fontSize: "0.78rem",
+                      px: 1.5,
+                      py: 0.6,
+                      borderRadius: "6px",
+                      border: `1.5px solid ${active ? color : color + "55"}`,
+                      bgcolor: active ? color + "28" : "transparent",
+                      color: active ? color : "#94a3b8",
+                      transition: "all 0.15s",
+                      "&:hover": {
+                        bgcolor: color + "20",
+                        borderColor: color,
+                        color,
+                      },
+                    }}
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        display: "inline-block",
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        bgcolor: color,
+                        mr: 0.75,
+                        flexShrink: 0,
+                      }}
+                    />
+                    {name}
+                  </Button>
+                );
+              })}
+            </Box>
+
+            {selectedPart && (
+              <Box
                 sx={{
-                  py: 0.5,
-                  minHeight: 48,
-                  background:
-                    selectedCategory === cat.id
-                      ? "rgba(44, 83, 100, 0.12)"
-                      : "transparent",
+                  mt: 2,
+                  p: 1.25,
+                  borderRadius: 1,
+                  bgcolor: "rgba(255,107,53,0.08)",
+                  border: "1px solid rgba(255,107,53,0.25)",
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                  <Typography sx={{ color: "#2c5364" }}>{cat.icon}</Typography>
-                  <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>
-                    {cat.name}
-                  </Typography>
-                  {grouped[cat.id]?.length > 0 && (
-                    <Typography
-                      variant="caption"
-                      sx={{ color: "#64748b", ml: "auto", mr: 1 }}
-                    >
-                      {grouped[cat.id].length}
-                    </Typography>
-                  )}
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails sx={{ p: 0, bgcolor: "rgba(0,0,0,0.15)" }}>
-                {renderCategoryContent(cat)}
-              </AccordionDetails>
-            </Accordion>
-          ))}
+                <Typography variant="caption" sx={{ color: "#ff6b35", fontWeight: 600 }}>
+                  Highlighting: {selectedPart}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#64748b", display: "block", mt: 0.25 }}>
+                  Point the camera at the car to detect it.
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
     </Box>
   );

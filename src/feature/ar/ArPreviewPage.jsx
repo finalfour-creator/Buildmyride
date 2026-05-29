@@ -10,12 +10,15 @@ import {
   CircularProgress,
 } from "@mui/material";
 import useCamera from "./hooks/useCamera";
-import useArPartsCatalog from "./hooks/useArPartsCatalog";
 import ArPartsPanel from "./components/ArPartsPanel";
 import ArSelectionSummary from "./components/ArSelectionSummary";
 import useYoloDetection from "./hooks/useYoloDetection";
+import useYoloSegmentation from "./hooks/useYoloSegmentation";
+import useYoloCarParts from "./hooks/useYoloCarParts";
 import ArDetectionOverlay from "./components/ArDetectionOverlay";
 import ArDetectionStatus from "./components/ArDetectionStatus";
+import ArSegmentationOverlay from "./components/ArSegmentationOverlay";
+import ArPartsOverlay from "./components/ArPartsOverlay";
 import ArThreeOverlay from "./components/ArThreeOverlay";
 
 const INITIAL_WHEELS = {
@@ -29,7 +32,6 @@ export default function ArPreviewPage() {
   const router = useRouter();
   const {
     videoRef,
-    status,
     error,
     startCamera,
     stopCamera,
@@ -49,11 +51,15 @@ export default function ArPreviewPage() {
     isInferring,
   } = useYoloDetection(videoRef, isActive);
 
-  const { categories, grouped, totalCount, loading, error: partsError } =
-    useArPartsCatalog();
+  const { carMask, segMode, segFps } =
+    useYoloSegmentation(videoRef, isActive);
 
-  const [selectedCategory, setSelectedCategory] = useState("body");
-  const [selectedColor, setSelectedColor] = useState("#1e3a5f");
+  const { parts, partsMode, partsFps } =
+    useYoloCarParts(videoRef, isActive);
+
+  const [mode, setMode] = useState("car"); // "car" | "parts"
+  const [selectedPart, setSelectedPart] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null); // null = green detection mode
   const [arBuild, setArBuild] = useState({});
   const [wheels, setWheels] = useState(INITIAL_WHEELS);
   const [activeWheelPosition] = useState(null);
@@ -322,7 +328,120 @@ export default function ArPreviewPage() {
             />
           )}
 
+          {/* Pixel-level segmentation mask — rendered below the bbox overlay */}
           {isActive && (
+            <ArSegmentationOverlay
+              containerRef={cameraContainerRef}
+              videoRef={videoRef}
+              carMask={carMask}
+              paintColor={selectedColor}
+            />
+          )}
+
+          {/* Segmentation status badge — top-right, only when model is active */}
+          {isActive && segMode === "seg" && (
+            <Box
+              sx={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                zIndex: 4,
+                px: 1.5,
+                py: 0.5,
+                borderRadius: 1,
+                bgcolor: carMask
+                  ? "rgba(0, 210, 90, 0.18)"
+                  : "rgba(15, 32, 39, 0.75)",
+                border: "1px solid",
+                borderColor: carMask
+                  ? "rgba(0, 210, 90, 0.5)"
+                  : "#2c5364",
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  bgcolor: carMask ? "#00d25a" : "#64748b",
+                  animation: carMask ? "pulse 1s infinite" : "none",
+                  "@keyframes pulse": {
+                    "0%, 100%": { opacity: 1 },
+                    "50%": { opacity: 0.3 },
+                  },
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  color: carMask ? "#00d25a" : "#64748b",
+                  fontWeight: 700,
+                  lineHeight: 1,
+                }}
+              >
+                SEG {segFps}/s
+              </Typography>
+            </Box>
+          )}
+
+          {/* Car-parts detection overlay — coloured boxes per detected part */}
+          {isActive && partsMode === "parts" && (
+            <ArPartsOverlay
+              containerRef={cameraContainerRef}
+              videoRef={videoRef}
+              parts={parts}
+              selectedPart={selectedPart}
+            />
+          )}
+
+          {/* Parts status badge */}
+          {isActive && partsMode === "parts" && (
+            <Box
+              sx={{
+                position: "absolute",
+                top: 44,
+                right: 12,
+                zIndex: 4,
+                px: 1.5,
+                py: 0.5,
+                borderRadius: 1,
+                bgcolor: parts
+                  ? "rgba(255, 107, 53, 0.18)"
+                  : "rgba(15, 32, 39, 0.75)",
+                border: "1px solid",
+                borderColor: parts ? "rgba(255,107,53,0.5)" : "#2c5364",
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  bgcolor: parts ? "#ff6b35" : "#64748b",
+                  animation: parts ? "pulse 1s infinite" : "none",
+                  "@keyframes pulse": {
+                    "0%, 100%": { opacity: 1 },
+                    "50%": { opacity: 0.3 },
+                  },
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{ color: parts ? "#ff6b35" : "#64748b", fontWeight: 700, lineHeight: 1 }}
+              >
+                PARTS {partsFps}/s
+              </Typography>
+            </Box>
+          )}
+
+          {/* Show bounding box only when there is no seg mask (box = fallback) */}
+          {isActive && !carMask && (
             <ArDetectionOverlay
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -350,20 +469,12 @@ export default function ArPreviewPage() {
         </Box>
 
         <ArPartsPanel
-          categories={categories}
-          grouped={grouped}
-          totalCount={totalCount}
-          loading={loading}
-          error={partsError}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-          arBuild={arBuild}
-          onPartSelect={handlePartSelect}
+          mode={mode}
+          setMode={setMode}
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}
-          wheels={wheels}
-          setWheels={setWheels}
-          activeWheelPosition={activeWheelPosition}
+          selectedPart={selectedPart}
+          setSelectedPart={setSelectedPart}
         />
       </Box>
     </Box>
