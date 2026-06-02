@@ -16,6 +16,7 @@ import GoogleIcon from "./components/GoogleIcon";
 // ✅ UPDATED COLORS
 const ACCENT = "#2c5364";
 const SLIDING_BG = "linear-gradient(135deg, #0f2027, #203a43, #2c5364)";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -90,7 +91,7 @@ export default function LoginPage() {
     setRegPasswordError("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
+      const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email: regEmail, password: regPassword }),

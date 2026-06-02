@@ -63,6 +63,7 @@ export default function ArPartsPanel({
               "rear-left": url,
               "rear-right": url,
             });
+            console.log("[AR] Wheels applied (all corners):", url);
           }}
         />
       );
@@ -120,7 +121,7 @@ export default function ArPartsPanel({
         </Typography>
         {!loading && !error && (
           <Typography variant="caption" sx={{ color: "#64748b" }}>
-            {totalCount} parts · tap to apply on detected car
+            {totalCount} parts · needs green detection box first
           </Typography>
         )}
       </Box>

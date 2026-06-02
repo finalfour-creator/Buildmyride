@@ -309,6 +309,28 @@ export default function ArPreviewPage() {
             </Box>
           )}
 
+          {isActive && !bbox && (
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 3,
+                px: 2,
+                py: 1,
+                bgcolor: "rgba(0,0,0,0.75)",
+                borderRadius: 1,
+                maxWidth: 280,
+                textAlign: "center",
+              }}
+            >
+              <Typography variant="caption" sx={{ color: "#ffca28" }}>
+                Point camera at a car (wait for green box) before parts and color appear in AR.
+              </Typography>
+            </Box>
+          )}
+
           {isActive && bbox && (
             <ArThreeOverlay
               ref={arOverlayRef}
@@ -318,7 +340,6 @@ export default function ArPreviewPage() {
               arBuild={arBuild}
               wheels={wheels}
               paintColor={selectedColor}
-              applyPaint
             />
           )}
 

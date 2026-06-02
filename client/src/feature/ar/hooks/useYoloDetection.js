@@ -78,7 +78,12 @@ export default function useYoloDetection(videoRef, isCameraActive) {
       let raw = null;
 
       if (detectionMode === "yolo") {
+      try {
         raw = await detectCarInVideoFrame(video);
+      } catch (e) {
+        console.error('[YOLO] detectCarInVideoFrame error:', e);
+        raw = null;
+      }
         if (!raw || raw.confidence < 0.35) {
           noCarFramesRef.current += 1;
         } else {
@@ -148,7 +153,7 @@ export default function useYoloDetection(videoRef, isCameraActive) {
 
       frameSkip += 1;
       const mobile = isMobileDevice();
-      const skip = detectionMode === "yolo" ? (mobile ? 8 : 3) : 2;
+      const skip = detectionMode === "yolo" ? (mobile ? 12 : 4) : 2;
       if (frameSkip % skip !== 0) return;
 
       runDetection();

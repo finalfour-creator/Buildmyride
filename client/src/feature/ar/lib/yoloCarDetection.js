@@ -17,8 +17,13 @@ export async function checkYoloModelAvailable() {
   if (modelAvailable !== null) return modelAvailable;
   try {
     const res = await fetch(YOLO_MODEL_URL, { method: "HEAD" });
+    console.log("[YOLO] Model HEAD request status:", res.status);
     modelAvailable = res.ok;
-  } catch {
+    if (!modelAvailable) {
+      console.warn(`[YOLO] Model not reachable at ${YOLO_MODEL_URL}`);
+    }
+  } catch (e) {
+    console.error('[YOLO] Error checking model availability:', e);
     modelAvailable = false;
   }
   return modelAvailable;
@@ -27,13 +32,20 @@ export async function checkYoloModelAvailable() {
 async function getSession() {
   if (!sessionPromise) {
     sessionPromise = (async () => {
-      const ort = await import("onnxruntime-web");
-      ort.env.wasm.wasmPaths =
-        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/";
-
-      return ort.InferenceSession.create(YOLO_MODEL_URL, {
-        executionProviders: ["wasm"],
-      });
+      try {
+        console.log('[YOLO] Importing onnxruntime-web');
+        const ort = await import('onnxruntime-web');
+        console.log('[YOLO] onnxruntime-web loaded');
+        ort.env.wasm.wasmPaths =
+          'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
+        console.log('[YOLO] Creating InferenceSession with WebGL provider');
+        return await ort.InferenceSession.create(YOLO_MODEL_URL, {
+          executionProviders: ['webgl', 'wasm'],
+        });
+      } catch (e) {
+        console.error('[YOLO] Failed to create InferenceSession:', e);
+        throw e;
+      }
     })();
   }
   return sessionPromise;

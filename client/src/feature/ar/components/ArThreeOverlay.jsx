@@ -62,6 +62,7 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
   const carAnchorRef = useRef(null);
+  const paintShellRef = useRef(null);
   const loadedPartsRef = useRef(new Map());
   const rafRef = useRef(null);
 
@@ -138,6 +139,11 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
         });
       });
       loadedPartsRef.current.clear();
+      if (paintShellRef.current) {
+        paintShellRef.current.geometry?.dispose();
+        paintShellRef.current.material?.dispose();
+        paintShellRef.current = null;
+      }
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -186,6 +192,33 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
     const scaleFactor = (rect.width / cw) * 1.1;
     carAnchor.scale.setScalar(Math.max(scaleFactor, 0.15));
   }, [bbox, containerRef, videoRef]);
+
+  /** Body paint: semi-transparent 3D shell over the detected car (not the live video pixels). */
+  useEffect(() => {
+    const carAnchor = carAnchorRef.current;
+    if (!carAnchor || !bbox) {
+      if (paintShellRef.current) paintShellRef.current.visible = false;
+      return;
+    }
+
+    if (!paintShellRef.current) {
+      const geometry = new THREE.PlaneGeometry(1.05, 0.58);
+      const material = new THREE.MeshBasicMaterial({
+        color: paintColor || "#ffffff",
+        transparent: true,
+        opacity: 0.38,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const shell = new THREE.Mesh(geometry, material);
+      shell.renderOrder = 0;
+      paintShellRef.current = shell;
+      carAnchor.add(shell);
+    } else {
+      paintShellRef.current.material.color.set(paintColor || "#ffffff");
+      paintShellRef.current.visible = true;
+    }
+  }, [bbox, paintColor]);
 
   useEffect(() => {
     const carAnchor = carAnchorRef.current;
@@ -241,16 +274,18 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
             fitToMaxDimension(model, kind === "spoiler" ? 0.35 : 0.45);
           }
 
-          if (applyPaint && paintColor) {
+          if (paintColor) {
             applyPaintColor(model, paintColor);
           }
 
           anchor.add(model);
           anchor.userData = { modelUrl: spec.url };
+          anchor.renderOrder = 1;
           carAnchor.add(anchor);
           loadedPartsRef.current.set(key, anchor);
+          console.log("[AR] 3D part attached:", spec.type, spec.slot, spec.url);
         } catch (err) {
-          console.error("[AR Phase 5] GLTF load failed:", spec.url, err);
+          console.error("[AR] GLTF load failed — check URL/CORS:", spec.url, err);
         }
       }
     }
@@ -261,13 +296,13 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
     };
   }, [arBuild, wheels, bbox, paintColor, applyPaint]);
 
-  /** Re-tint all loaded meshes when body color changes */
+  /** Re-tint loaded GLTF parts when color changes */
   useEffect(() => {
-    if (!applyPaint || !paintColor) return;
+    if (!paintColor) return;
     loadedPartsRef.current.forEach((anchor) => {
       applyPaintColor(anchor, paintColor);
     });
-  }, [paintColor, applyPaint, arBuild, wheels]);
+  }, [paintColor, arBuild, wheels]);
 
   if (!bbox) return null;
 
