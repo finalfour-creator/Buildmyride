@@ -6,26 +6,26 @@ import PasswordSettings from "./PasswordSettings";
 import DangerZone from "./DangerZone";
 
 export default function SettingsPage() {
-  const [updateMessage, setUpdateMessage] = useState("");
+  // { text, severity } so failures no longer render as a green "success" banner.
+  const [message, setMessage] = useState(null);
 
-  const showMessage = (message) => {
-    setUpdateMessage(message);
-    setTimeout(() => setUpdateMessage(""), 3000);
+  const showMessage = (text, severity = "success") => {
+    setMessage({ text, severity });
+    setTimeout(() => setMessage(null), 4000);
   };
 
   return (
     <Box
       sx={{
-        maxWidth: 700,
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        minHeight: "100%",
+        maxWidth: 720,
+        mx: "auto",
+        width: "100%",
+        px: { xs: 2, sm: 0 },
+        py: { xs: 2, sm: 1 },
       }}
     >
-      {/* Header */}
-      <Box sx={{ textAlign: "center", mb: 4 }}>
+      {/* Header — left aligned for scannability */}
+      <Box sx={{ mb: 4 }}>
         <Typography
           variant="h4"
           sx={{
@@ -34,24 +34,28 @@ export default function SettingsPage() {
             backgroundClip: "text",
             WebkitBackgroundClip: "text",
             color: "transparent",
-            mb: 1,
+            mb: 0.5,
           }}
         >
           Settings
         </Typography>
         <Typography variant="body2" sx={{ color: "#6b7c88" }}>
-          Manage your account preferences
+          Manage your account, security, and personal information
         </Typography>
       </Box>
 
-      {/* Update Message */}
-      {updateMessage && (
-        <Alert severity="success" sx={{ mb: 3, borderRadius: 2, width: "100%" }}>
-          {updateMessage}
+      {/* Status message — severity-aware */}
+      {message && (
+        <Alert
+          severity={message.severity}
+          onClose={() => setMessage(null)}
+          sx={{ mb: 3, borderRadius: 2 }}
+        >
+          {message.text}
         </Alert>
       )}
 
-      {/* Settings Sections */}
+      {/* Sections ordered by frequency, with destructive actions last */}
       <ProfileSettings showMessage={showMessage} />
       <PasswordSettings showMessage={showMessage} />
       <DangerZone showMessage={showMessage} />

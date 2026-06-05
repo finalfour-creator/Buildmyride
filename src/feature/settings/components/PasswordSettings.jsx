@@ -1,19 +1,36 @@
-
 "use client";
 import { useState } from "react";
-import { Box, Typography, Grid, TextField, Button, Paper } from "@mui/material";
+import {
+  Box,
+  Typography,
+  TextField,
+  Button,
+  InputAdornment,
+  IconButton,
+} from "@mui/material";
 import { useSession } from "next-auth/react";
+import { Lock, KeyRound, ShieldCheck, Eye, EyeOff, Check } from "lucide-react";
+import SectionCard from "@/components/ui/SectionCard";
 
 const passwordItems = [
-  { label: "Current Password", name: "currentPassword", icon: "🔒", color: "#2c5364", type: "password" },
-  { label: "New Password", name: "newPassword", icon: "✨", color: "#203a43", type: "password" },
-  { label: "Confirm New Password", name: "confirmPassword", icon: "✓", color: "#2c5364", type: "password" },
+  { label: "Current Password", name: "currentPassword", Icon: Lock },
+  { label: "New Password", name: "newPassword", Icon: KeyRound },
+  { label: "Confirm New Password", name: "confirmPassword", Icon: ShieldCheck },
+];
+
+// Live checklist rules (mirror validatePassword) so users see progress as they type.
+const passwordRules = [
+  { label: "At least 8 characters", test: (p) => p.length >= 8 },
+  { label: "One uppercase letter (A-Z)", test: (p) => /[A-Z]/.test(p) },
+  { label: "One lowercase letter (a-z)", test: (p) => /[a-z]/.test(p) },
+  { label: "One number (0-9)", test: (p) => /[0-9]/.test(p) },
+  { label: "One special character (!@#$%^&*)", test: (p) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
 ];
 
 // ✅ PASSWORD VALIDATION FUNCTION (same as register)
 const validatePassword = (password) => {
   const errors = [];
-  
+
   if (password.length < 8) {
     errors.push("at least 8 characters");
   }
@@ -29,7 +46,7 @@ const validatePassword = (password) => {
   if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
     errors.push("1 special character (!@#$%^&*)");
   }
-  
+
   return errors;
 };
 
@@ -43,7 +60,14 @@ export default function PasswordSettings({ showMessage }) {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState({});
-  const [passwordStrengthError, setPasswordStrengthError] = useState("");
+  const [show, setShow] = useState({
+    currentPassword: false,
+    newPassword: false,
+    confirmPassword: false,
+  });
+
+  const toggleShow = (name) =>
+    setShow((prev) => ({ ...prev, [name]: !prev[name] }));
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -52,16 +76,6 @@ export default function PasswordSettings({ showMessage }) {
     // Clear error when typing
     if (errors[name]) {
       setErrors({ ...errors, [name]: "" });
-    }
-
-    // ✅ Validate new password strength in real-time
-    if (name === "newPassword") {
-      const strengthErrors = validatePassword(value);
-      if (value.length > 0 && strengthErrors.length > 0) {
-        setPasswordStrengthError(`Password must contain: ${strengthErrors.join(", ")}`);
-      } else {
-        setPasswordStrengthError("");
-      }
     }
 
     // Clear confirm password error when new password or confirm changes
@@ -96,10 +110,9 @@ export default function PasswordSettings({ showMessage }) {
     return newErrors;
   };
 
-  const handleSubmit = async () => {
-    // Clear previous password strength error
-    setPasswordStrengthError("");
-    
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+
     const newErrors = validate();
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -138,103 +151,115 @@ export default function PasswordSettings({ showMessage }) {
         newPassword: "",
         confirmPassword: "",
       });
-      setPasswordStrengthError("");
 
       showMessage("Password updated successfully");
 
     } catch (error) {
-      showMessage(error.message || "Update failed");
+      showMessage(error.message || "Update failed", "error");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Paper sx={{ mb: 4, width: "100%" }}>
-      <Box sx={{ background: "linear-gradient(135deg, #203a43, #2c5364)", p: 2, textAlign: "center" }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: "#ffffff" }}>
-          Change Password
-        </Typography>
-      </Box>
-
-      <Box sx={{ p: 3 }}>
-        <Grid container spacing={2}>
-          {passwordItems.map((item, index) => (
-            <Grid item xs={12} key={index}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  p: 1.5,
-                  bgcolor: index % 2 === 0 ? "#f8fafc" : "#ffffff",
-                  borderRadius: 1,
-                  border: "1px solid #e8e0d6",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "50%",
-                    background: `linear-gradient(135deg, ${item.color}, ${item.color}cc)`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 20,
-                  }}
-                >
-                  {item.icon}
-                </Box>
-
-                <Box sx={{ flex: 1 }}>
-                  <TextField
-                    fullWidth
-                    label={item.label}
-                    name={item.name}
-                    type={item.type}
-                    value={passwordData[item.name]}
-                    onChange={handleChange}
-                    error={!!errors[item.name]}
-                    helperText={
-                      errors[item.name] ||
-                      (item.name === "newPassword" && passwordStrengthError)
-                    }
-                    variant="outlined"
-                    size="small"
-                    disabled={loading}
-                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 1 } }}
-                  />
-                </Box>
-              </Box>
-            </Grid>
+    <Box component="form" onSubmit={handleSubmit}>
+      <SectionCard
+        icon={<Lock size={18} />}
+        title="Change Password"
+        subtitle="Use a strong password you don't reuse elsewhere"
+      >
+        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+          {passwordItems.map(({ label, name, Icon }) => (
+            <TextField
+              key={name}
+              fullWidth
+              label={label}
+              name={name}
+              type={show[name] ? "text" : "password"}
+              value={passwordData[name]}
+              onChange={handleChange}
+              error={!!errors[name]}
+              helperText={errors[name] || ""}
+              disabled={loading}
+              autoComplete={name === "currentPassword" ? "current-password" : "new-password"}
+              sx={{ mb: 2 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Icon size={18} color="#8a9aa8" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => toggleShow(name)}
+                      edge="end"
+                      size="small"
+                      aria-label={show[name] ? `Hide ${label}` : `Show ${label}`}
+                      tabIndex={-1}
+                    >
+                      {show[name] ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
           ))}
-        </Grid>
 
-        {/* ✅ Password Requirements Hint */}
-        <Box sx={{ mt: 2, mb: 2, p: 1.5, bgcolor: "#f0f4f8", borderRadius: 1 }}>
-          <Typography variant="caption" sx={{ color: "#64748b" }}>
-            <strong>Password requirements:</strong> Minimum 8 characters, at least 1 uppercase letter, 
-            1 lowercase letter, 1 number, and 1 special character (!@#$%^&*)
-          </Typography>
-        </Box>
+          {/* Live requirement checklist — replaces the static paragraph */}
+          {passwordData.newPassword.length > 0 && (
+            <Box
+              sx={{
+                mt: 0.5,
+                mb: 2,
+                p: 1.5,
+                bgcolor: "#f6f8fa",
+                borderRadius: 1.5,
+                border: "1px solid #eef1f3",
+              }}
+            >
+              {passwordRules.map((rule) => {
+                const passed = rule.test(passwordData.newPassword);
+                return (
+                  <Box
+                    key={rule.label}
+                    sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}
+                  >
+                    <Check
+                      size={15}
+                      color={passed ? "#16a34a" : "#cbd5e1"}
+                      strokeWidth={3}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{ color: passed ? "#16a34a" : "#8a9aa8" }}
+                    >
+                      {rule.label}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
 
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={loading}
-            sx={{
-              background: "linear-gradient(135deg, #0f2027, #2c5364)",
-              borderRadius: 2,
-              textTransform: "none",
-              px: 4,
-            }}
-          >
-            {loading ? "Updating..." : "Update Password"}
-          </Button>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading}
+              sx={{
+                background: "linear-gradient(135deg, #0f2027, #2c5364)",
+                borderRadius: 2,
+                textTransform: "none",
+                px: 4,
+                "&.Mui-disabled": { background: "#cbd5e1", color: "#ffffff" },
+              }}
+            >
+              {loading ? "Updating..." : "Update Password"}
+            </Button>
+          </Box>
         </Box>
-      </Box>
-    </Paper>
+      </SectionCard>
+    </Box>
   );
 }
