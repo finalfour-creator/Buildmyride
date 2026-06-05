@@ -1,289 +1,209 @@
 "use client";
-import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from "react";
+import {
+  useEffect, useRef, useState, useImperativeHandle, forwardRef,
+} from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { Box, Typography, CircularProgress } from "@mui/material";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+/* ── Design tokens (match landing page) ─────────────────────── */
+const CP  = "#00ffcc";
+const CS  = "#ff0077";
+const BG  = "#050811";
+const GB  = "rgba(10,14,30,.72)";
+const GBR = "rgba(0,255,204,.14)";
+const FD  = "'Orbitron', monospace";
 
-/**
- * Determine if a mesh should receive body paint color.
- * Returns true for exterior body panels; false for windows, lights, interior, tyres, etc.
- */
+/* ── Camera presets — front-facing hero shot (matches landing page) */
+const EXT_POS    = new THREE.Vector3(0, 1.4, 5.2);
+const EXT_TARGET = new THREE.Vector3(0, 0.3, 0);
+const INT_POS    = new THREE.Vector3(0, 0.55, 0.9);
+const INT_TARGET = new THREE.Vector3(0, 0.45, -0.7);
+
+/* ══════════════════════════════════════════════════════════════
+   HELPERS  (paint / wheel / spoiler — all unchanged)
+══════════════════════════════════════════════════════════════ */
+
 function isBodyPaintMesh(meshName) {
   const n = (meshName || "").toLowerCase();
-
-  // Exclude patterns: things that should NOT be painted
-  const excludePatterns = [
-    "glass", "window", "windshield", "windscreen",
-    "light", "lamp", "headlight", "taillight", "fog", "indicator", "signal", "lens",
-    "interior", "seat", "dashboard", "dash", "steering", "console", "pedal", "knob",
-    "tyre", "tire", "wheel", "rim", "brake", "disc", "caliper",
-    "chrome", "emblem", "logo", "badge", "plate", "number", "text",
-    "mirror_glass", "wiper", "antenna", "grille", "grill", "mesh",
-    "rubber", "seal", "trim", "molding", "plastic", "carbon",
-    "exhaust", "pipe", "muffler", "tip",
-    "underbody", "undercarriage", "chassis", "frame", "suspension", "engine", "radiator", "motor",
+  const EXCLUDE = [
+    "glass","window","windshield","windscreen",
+    "light","lamp","headlight","taillight","fog","indicator","signal","lens",
+    "interior","seat","dashboard","dash","steering","console","pedal","knob",
+    "tyre","tire","wheel","rim","brake","disc","caliper",
+    "chrome","emblem","logo","badge","plate","number","text",
+    "mirror_glass","wiper","antenna","grille","grill","mesh",
+    "rubber","seal","trim","molding","plastic","carbon",
+    "exhaust","pipe","muffler","tip",
+    "underbody","undercarriage","chassis","frame","suspension","engine","radiator","motor",
   ];
-
-  for (const pattern of excludePatterns) {
-    if (n.includes(pattern)) return false;
-  }
-
-  // Include patterns: things that SHOULD be painted (body panels)
-  const includePatterns = [
-    "body", "door", "hood", "bonnet", "fender", "bumper",
-    "roof", "trunk", "boot", "panel", "quarter", "pillar",
-    "skirt", "spoiler", "wing", "paint", "exterior", "shell",
+  for (const p of EXCLUDE) if (n.includes(p)) return false;
+  const INCLUDE = [
+    "body","door","hood","bonnet","fender","bumper",
+    "roof","trunk","boot","panel","quarter","pillar",
+    "skirt","spoiler","wing","paint","exterior","shell",
   ];
-
-  for (const pattern of includePatterns) {
-    if (n.includes(pattern)) return true;
-  }
-
-  // If no pattern matched, we perform a "generic" check.
-  // Many models use names like "Mesh_001". We allow these if they are large enough,
-  // but for simplicity in this helper, we'll allow generic names if they weren't excluded.
+  for (const p of INCLUDE) if (n.includes(p)) return true;
   return true;
 }
 
-/**
- * Apply color to all paintable meshes within a THREE.Object3D.
- */
 function applyColorToPaintableMeshes(object, color) {
   if (!object || !color) return;
   object.traverse((node) => {
     if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
       const mats = Array.isArray(node.material) ? node.material : [node.material];
-      mats.forEach((m) => {
-        if (m.color) {
-          // If the material has a color property, set it.
-          // Note: Some models use textures for color. Setting color might tint them.
-          m.color.set(color);
-        }
-      });
+      mats.forEach((m) => { if (m.color) m.color.set(color); });
     }
   });
 }
 
-/**
- * Classify a wheel mesh into a position id.
- * First tries to extract from the mesh name (FL, FR, BL, BR codes).
- * Falls back to world-space coordinate classification.
- */
 function classifyWheelPosition(mesh) {
   const name = (mesh.name || "").toUpperCase();
-
-  // Check for common position codes in the mesh name
   if (name.includes("_FL_") || name.includes("_FL") || name.startsWith("FL_")) return "front-left";
   if (name.includes("_FR_") || name.includes("_FR") || name.startsWith("FR_")) return "front-right";
   if (name.includes("_BL_") || name.includes("_BL") || name.startsWith("BL_")) return "rear-left";
   if (name.includes("_BR_") || name.includes("_BR") || name.startsWith("BR_")) return "rear-right";
   if (name.includes("_RL_") || name.includes("_RL") || name.startsWith("RL_")) return "rear-left";
   if (name.includes("_RR_") || name.includes("_RR") || name.startsWith("RR_")) return "rear-right";
-
-  // Fallback: use world-space coordinates
   const wp = new THREE.Vector3();
   mesh.getWorldPosition(wp);
   const side = wp.x >= 0 ? "right" : "left";
-  const end = wp.z >= 0 ? "front" : "rear";
+  const end  = wp.z >= 0 ? "front" : "rear";
   return `${end}-${side}`;
 }
 
-/**
- * Detect wheel meshes by traversing the GLTF scene.
- * Returns a Map<positionId, meshNode>.
- * Matches: wheel, tire, tyre, rim (case-insensitive).
- */
 function discoverWheelMeshes(model) {
   const candidates = [];
-
-  // Log ALL mesh names to help debug if pattern matching fails
-  console.log("── All mesh names in model ──");
   model.traverse((node) => {
-    if (node.isMesh) {
-      console.log(`  mesh: "${node.name}"`);
-    }
+    if (node.isMesh) console.log(`  mesh: "${node.name}"`);
   });
-
-  // Collect candidates — include "tyre" (British spelling) and anchor points
   model.traverse((node) => {
     if (node.isMesh || node.isGroup) {
       const n = (node.name || "").toLowerCase();
       const isWheelPart = n.includes("wheel") || n.includes("tire") || n.includes("tyre") || n.includes("rim");
       const isAnchor = (n.includes("pos_") || n.includes("anchor_")) &&
         (n.includes("fl") || n.includes("fr") || n.includes("bl") || n.includes("br") || n.includes("rl") || n.includes("rr"));
-
-      if (isWheelPart || isAnchor) {
-        candidates.push(node);
-      }
+      if (isWheelPart || isAnchor) candidates.push(node);
     }
   });
-
   if (candidates.length === 0) {
-    console.warn("No wheel markers found. Generating virtual anchors based on car size...");
-
-    // Fallback: Generate 4 virtual anchors at the corners of the car
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
+    const box    = new THREE.Box3().setFromObject(model);
+    const size   = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-
-    // Approximate wheel positions (Relative to CENTER)
-    const xOffset = size.x * 0.48; // Push wheels OUT towards the sides
-    const zOffset = size.z * 0.32; // Move wheels OUT towards the front/back ends
-    const yPos = box.min.y + (size.y * 0.15); // Slightly above bottom
-
+    const xOff   = size.x * 0.48;
+    const zOff   = size.z * 0.32;
+    const yPos   = box.min.y + size.y * 0.15;
     const virtualAnchors = new Map();
-    const positions = [
-      { id: "front-left", pos: [center.x - xOffset, yPos, center.z + zOffset] },
-      { id: "front-right", pos: [center.x + xOffset, yPos, center.z + zOffset] },
-      { id: "rear-left", pos: [center.x - xOffset, yPos, center.z - zOffset] },
-      { id: "rear-right", pos: [center.x + xOffset, yPos, center.z - zOffset] }
-    ];
-
-    positions.forEach(p => {
-      const anchor = new THREE.Group();
-      anchor.name = `virtual_anchor_${p.id}`;
-      // Set the world position
-      anchor.position.set(...p.pos);
-      // We don't add it to the model to avoid distorting the model's bounding box
-      virtualAnchors.set(p.id, anchor);
+    [
+      { id: "front-left",  pos: [center.x - xOff, yPos, center.z + zOff] },
+      { id: "front-right", pos: [center.x + xOff, yPos, center.z + zOff] },
+      { id: "rear-left",   pos: [center.x - xOff, yPos, center.z - zOff] },
+      { id: "rear-right",  pos: [center.x + xOff, yPos, center.z - zOff] },
+    ].forEach(p => {
+      const a = new THREE.Group(); a.name = `virtual_anchor_${p.id}`; a.position.set(...p.pos);
+      virtualAnchors.set(p.id, a);
     });
-
     return virtualAnchors;
   }
-
-  // Deduplicate: if a parent and its child both match, prefer the parent
-  const roots = candidates.filter((c) => {
-    return !candidates.some((other) => other !== c && isDescendant(c, other));
-  });
-
-  console.log(`Discovered ${roots.length} wheel root nodes:`, roots.map((r) => r.name));
-
-  // Classify each root by name-based position codes (FL, FR, BL, BR)
-  const posMap = new Map();
-  const posCount = {};
+  const roots = candidates.filter(c => !candidates.some(o => o !== c && isDescendant(c, o)));
+  const posMap = new Map(); const posCount = {};
   for (const node of roots) {
     let posId = classifyWheelPosition(node);
-    if (posMap.has(posId)) {
-      const suffix = (posCount[posId] = (posCount[posId] || 1) + 1);
-      posId = `${posId}-${suffix}`;
-    }
+    if (posMap.has(posId)) { const s = (posCount[posId] = (posCount[posId] || 1) + 1); posId = `${posId}-${s}`; }
     posMap.set(posId, node);
   }
-
-  console.log("Wheel position mapping:", Object.fromEntries(posMap));
   return posMap;
 }
 
-/** Check whether `child` is a descendant of `parent` */
 function isDescendant(child, parent) {
   let cur = child.parent;
-  while (cur) {
-    if (cur === parent) return true;
-    cur = cur.parent;
-  }
+  while (cur) { if (cur === parent) return true; cur = cur.parent; }
   return false;
 }
 
-/**
- * Detect spoiler meshes by traversing the GLTF scene.
- * Returns the first spoiler mesh found.
- */
 function discoverSpoilerMesh(model) {
-  let anchor = null;
-  let isExistingSpoiler = false;
-
+  let anchor = null; let isExistingSpoiler = false;
   const fullBox = new THREE.Box3().setFromObject(model);
-  const size = fullBox.getSize(new THREE.Vector3());
-
-  // 1. Look for explicit spoiler names
+  const size    = fullBox.getSize(new THREE.Vector3());
   model.traverse((node) => {
     if ((node.isMesh || node.isGroup) && !anchor) {
       const n = (node.name || "").toLowerCase();
-
-      // Strict spoiler check (exclude mirrors, antennas, etc.)
-      const isSpoiler = (n.includes("spoiler") || n.includes("wing")) &&
-        !n.includes("mirror") &&
-        !n.includes("antenna") &&
-        !n.includes("wiper");
-
+      const isSpoiler = (n.includes("spoiler") || n.includes("wing")) && !n.includes("mirror") && !n.includes("antenna") && !n.includes("wiper");
       if (isSpoiler) {
-        // SIZE CHECK: If the "spoiler" is too large, it's probably a body panel.
-        // Don't hide it in that case.
-        const nodeBox = new THREE.Box3().setFromObject(node);
-        const nodeSize = nodeBox.getSize(new THREE.Vector3());
-
-        if (nodeSize.x < size.x * 0.7 && nodeSize.y < size.y * 0.4) {
-          anchor = node;
-          isExistingSpoiler = true;
-        } else {
-          // It's too big to be just a spoiler, treat it as a trunk anchor
-          anchor = node;
-          isExistingSpoiler = false;
-        }
+        const nb = new THREE.Box3().setFromObject(node);
+        const ns = nb.getSize(new THREE.Vector3());
+        anchor = node;
+        isExistingSpoiler = (ns.x < size.x * 0.7 && ns.y < size.y * 0.4);
       }
     }
   });
-
-  // 2. Look for trunk names
   if (!anchor) {
     model.traverse((node) => {
       if ((node.isMesh || node.isGroup) && !anchor) {
         const n = (node.name || "").toLowerCase();
-        // Look for trunk-specific names
         if (n.includes("trunk") || n.includes("boot") || n.includes("rear_deck")) {
-          const nodeBox = new THREE.Box3().setFromObject(node);
-          const nodeSize = nodeBox.getSize(new THREE.Vector3());
-          if (nodeSize.x < size.x * 0.95) {
-            anchor = node;
-            isExistingSpoiler = false;
-          }
+          const nb = new THREE.Box3().setFromObject(node);
+          const ns = nb.getSize(new THREE.Vector3());
+          if (ns.x < size.x * 0.95) { anchor = node; isExistingSpoiler = false; }
         }
       }
     });
   }
-
-  // 3. Fallback: Find the highest mesh in the rear-most part of the car
   if (!anchor) {
-    // We try both +Z and -Z as "rear" and pick the one that looks more like a trunk
-    // (Usually +Z is back in standard GLTF car models)
-    const rearLimitZ = fullBox.max.z - (size.z * 0.2); // Last 20%
-    let highestY = -Infinity;
-
+    const rearLimitZ = fullBox.max.z - size.z * 0.2; let highestY = -Infinity;
     model.traverse((node) => {
       if (node.isMesh) {
         const box = new THREE.Box3().setFromObject(node);
-        const center = box.getCenter(new THREE.Vector3());
-        const nodeSize = box.getSize(new THREE.Vector3());
-
-        // Must be in the rear 20%, not the whole car, and centered horizontally
-        if (center.z > rearLimitZ &&
-          nodeSize.x < size.x * 0.8 &&
-          Math.abs(center.x) < size.x * 0.3) {
-
-          if (box.max.y > highestY) {
-            highestY = box.max.y;
-            anchor = node;
-            isExistingSpoiler = false;
-          }
+        const c   = box.getCenter(new THREE.Vector3());
+        const ns  = box.getSize(new THREE.Vector3());
+        if (c.z > rearLimitZ && ns.x < size.x * 0.8 && Math.abs(c.x) < size.x * 0.3 && box.max.y > highestY) {
+          highestY = box.max.y; anchor = node; isExistingSpoiler = false;
         }
       }
     });
   }
-
-  if (anchor) {
-    console.log(`[Spoiler] Identified anchor: "${anchor.name}" | Existing Spoiler: ${isExistingSpoiler}`);
-  } else {
-    console.warn("[Spoiler] No suitable anchor found for spoiler placement.");
-  }
-
   return { mesh: anchor, isExistingSpoiler };
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════
+   CANVAS BUTTON (overlay control)
+══════════════════════════════════════════════════════════════ */
+function CanvasBtn({ children, onClick, active }) {
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        fontFamily: FD,
+        fontSize: "0.58rem",
+        fontWeight: 700,
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        color: active ? BG : CP,
+        background: active ? `linear-gradient(135deg,${CP},#0088ff)` : GB,
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: `1px solid ${active ? CP : GBR}`,
+        px: 1.5, py: 0.7,
+        cursor: "pointer",
+        userSelect: "none",
+        transition: "all .25s",
+        whiteSpace: "nowrap",
+        "&:hover": {
+          background: active ? `linear-gradient(135deg,${CP},#0088ff)` : "rgba(0,255,204,.12)",
+          borderColor: CP,
+          boxShadow: `0 0 14px rgba(0,255,204,.25)`,
+        },
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
 
+/* ══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════════ */
 const ThreeViewer = forwardRef(({
   modelPath,
   backgroundColor = "#ffffff",
@@ -294,186 +214,356 @@ const ThreeViewer = forwardRef(({
   onWheelClick = null,
   sx = {},
 }, ref) => {
-  const mountRef = useRef(null);
-  const sceneRef = useRef(null);
-  const cameraRef = useRef(null);
-  const rendererRef = useRef(null);
-  const modelRef = useRef(null);
-  const controlsRef = useRef(null);
-  const animFrameRef = useRef(null);
 
-  // Expose functions to parent
+  const mountRef      = useRef(null);
+  const sceneRef      = useRef(null);
+  const cameraRef     = useRef(null);
+  const rendererRef   = useRef(null);
+  const modelRef      = useRef(null);
+  const controlsRef   = useRef(null);
+  const animFrameRef  = useRef(null);
+
+  /* environment refs */
+  const lightRefs     = useRef({});
+  const dustRef       = useRef(null);
+  const dustPosRef    = useRef(null);
+  const dustVelRef    = useRef(null);
+  const beamsRef      = useRef([]);
+
+  /* audio ref */
+  const audioRef      = useRef(null);
+
+  /* camera lerp refs */
+  const cameraTransRef  = useRef(false);
+  const lerpPosRef      = useRef(null);
+  const lerpTargetRef   = useRef(null);
+
+  /* wheel / spoiler / modular (unchanged) */
+  const wheelMeshMapRef      = useRef(new Map());
+  const originalWheelDataRef = useRef(new Map());
+  const customWheelsRef      = useRef(new Map());
+  const originalSpoilerRef   = useRef(null);
+  const originalSpoilerDataRef = useRef(null);
+  const customSpoilerRef     = useRef(null);
+  const modularPartsRef      = useRef(new Map());
+
+  const raycasterRef  = useRef(new THREE.Raycaster());
+  const mouseRef      = useRef(new THREE.Vector2());
+  const onWheelClickRef = useRef(onWheelClick);
+  useEffect(() => { onWheelClickRef.current = onWheelClick; }, [onWheelClick]);
+
+  const [error, setError]         = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [isDimmed, setIsDimmed]   = useState(false);
+  const [isMuted, setIsMuted]     = useState(false);
+  const [isInterior, setIsInterior] = useState(false);
+
+  /* screenshot */
   useImperativeHandle(ref, () => ({
     takeScreenshot: () => {
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        // Render one frame immediately to ensure buffer is fresh
         rendererRef.current.render(sceneRef.current, cameraRef.current);
         return rendererRef.current.domElement.toDataURL("image/png");
       }
       return null;
-    }
+    },
   }));
 
-  // Wheel-related refs
-  const wheelMeshMapRef = useRef(new Map());       // positionId → original mesh
-  const originalWheelDataRef = useRef(new Map());  // positionId → { position, quaternion, scale, parent }
-  const customWheelsRef = useRef(new Map());       // positionId → loaded custom mesh
+  /* ── Audio helpers ───────────────────────────────────────── */
+  const initAudio = () => {
+    if (audioRef.current?.ctx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ctx  = new AC();
+      const gain = ctx.createGain(); gain.gain.value = 0.03; gain.connect(ctx.destination);
+      const o1 = ctx.createOscillator(); o1.type = "sawtooth"; o1.frequency.value = 42;
+      const o2 = ctx.createOscillator(); o2.type = "triangle"; o2.frequency.value = 85;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 0.55;
+      const lg  = ctx.createGain(); lg.gain.value = 1.5;
+      lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
+      o1.connect(gain); o2.connect(gain);
+      o1.start(); o2.start(); lfo.start();
+      audioRef.current = { ctx, gain };
+    } catch { /* audio blocked */ }
+  };
 
-  // Spoiler-related refs
-  const originalSpoilerRef = useRef(null);
-  const originalSpoilerDataRef = useRef(null);
-  const customSpoilerRef = useRef(null);
+  const handleMute = () => {
+    initAudio();
+    const next = !isMuted; setIsMuted(next);
+    if (audioRef.current?.gain) {
+      audioRef.current.gain.gain.setTargetAtTime(next ? 0 : 0.03, audioRef.current.ctx.currentTime, 0.3);
+    }
+  };
 
-  // Modular parts tracking (Bumper, Hood, etc.)
-  const modularPartsRef = useRef(new Map()); // slotKey -> THREE.Group
+  /* ── Dim / Illuminate ───────────────────────────────────── */
+  const handleDim = () => {
+    const next = !isDimmed; setIsDimmed(next);
+    const L = lightRefs.current;
+    if (next) {
+      if (L.ambient) L.ambient.intensity = 0.4;
+      if (L.key)     L.key.intensity     = 0.2;
+      if (L.fill)    L.fill.intensity    = 0.1;
+      if (L.rim)     L.rim.intensity     = 0.3;
+      if (L.neonL)   L.neonL.intensity   = 2.0;
+      if (L.neonR)   L.neonR.intensity   = 2.0;
+    } else {
+      if (L.ambient) L.ambient.intensity = 3.0;
+      if (L.key)     L.key.intensity     = 2.0;
+      if (L.fill)    L.fill.intensity    = 0.8;
+      if (L.rim)     L.rim.intensity     = 0.9;
+      if (L.neonL)   L.neonL.intensity   = 0.7;
+      if (L.neonR)   L.neonR.intensity   = 0.5;
+    }
+  };
 
-  const raycasterRef = useRef(new THREE.Raycaster());
-  const mouseRef = useRef(new THREE.Vector2());
+  /* ── Interior / Exterior toggle ─────────────────────────── */
+  const handleInteriorToggle = () => {
+    const next = !isInterior; setIsInterior(next);
+    if (!controlsRef.current || !cameraRef.current) return;
+    controlsRef.current.enabled = false;
+    cameraTransRef.current = true;
+    if (next) {
+      lerpPosRef.current    = INT_POS.clone();
+      lerpTargetRef.current = INT_TARGET.clone();
+      controlsRef.current.minDistance     = 0.3;
+      controlsRef.current.maxDistance     = 2.2;
+      controlsRef.current.minAzimuthAngle = -Math.PI / 4;
+      controlsRef.current.maxAzimuthAngle =  Math.PI / 4;
+      controlsRef.current.minPolarAngle   =  Math.PI * 0.35;
+      controlsRef.current.maxPolarAngle   =  Math.PI * 0.62;
+    } else {
+      lerpPosRef.current    = EXT_POS.clone();
+      lerpTargetRef.current = EXT_TARGET.clone();
+      controlsRef.current.minDistance     = 1;
+      controlsRef.current.maxDistance     = 20;
+      controlsRef.current.minAzimuthAngle = -Infinity;
+      controlsRef.current.maxAzimuthAngle =  Infinity;
+      controlsRef.current.minPolarAngle   =  0;
+      controlsRef.current.maxPolarAngle   =  Math.PI * 0.85;
+    }
+  };
 
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Stable reference to the latest onWheelClick so the click handler always sees it
-  const onWheelClickRef = useRef(onWheelClick);
-  useEffect(() => { onWheelClickRef.current = onWheelClick; }, [onWheelClick]);
-
-  // ── Scene setup ───────────────────────────────────────────────────────────
+  /* ════════════════════════════════════════════════════════════
+     SCENE SETUP
+  ════════════════════════════════════════════════════════════ */
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
-    const width = container.clientWidth || 600;
-    const height = container.clientHeight || 450;
+    const width  = container.clientWidth  || 800;
+    const height = container.clientHeight || 500;
 
+    /* ── Scene ───────────────────────────────────────────────── */
     const scene = new THREE.Scene();
-    if (backgroundColor !== "transparent") {
-      scene.background = new THREE.Color(backgroundColor);
-    }
+    /* Explicit teal-navy background — same colour visible in landing page sky */
+    scene.background = new THREE.Color(0x0e2840);
+    scene.fog = new THREE.FogExp2(0x0e2840, 0.018);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(3, 1.5, 4);
-    camera.lookAt(0, 0.2, 0);
+    /* Camera */
+    const camera = new THREE.PerspectiveCamera(50, width / height, 0.05, 500);
+    camera.position.copy(EXT_POS);
+    camera.lookAt(EXT_TARGET);
     cameraRef.current = camera;
 
+    /* Renderer */
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: backgroundColor === "transparent",
-      preserveDrawingBuffer: true, // Allow screenshots
+      alpha: false,
+      preserveDrawingBuffer: true,
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    /* LinearToneMapping — no ACES colour shift, teal stays teal */
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    renderer.setClearColor(0x0e2840, 1);
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    /* Controls */
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enableZoom = true;
-    controls.enablePan = true;
-    controls.zoomSpeed = 1;
-    controls.rotateSpeed = 1;
-    controls.target.set(0, 0.2, 0);
+    controls.enableDamping  = true;
+    controls.dampingFactor  = 0.08;
+    controls.enableZoom     = true;
+    controls.enablePan      = false;
+    controls.minDistance    = 1;
+    controls.maxDistance    = 20;
+    controls.maxPolarAngle  = Math.PI * 0.85;
+    controls.target.copy(EXT_TARGET);
+    controls.update();
     controlsRef.current = controls;
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1);
-    mainLight.position.set(3, 5, 2);
-    mainLight.castShadow = true;
-    scene.add(mainLight);
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    fillLight.position.set(-2, 2, 2);
-    scene.add(fillLight);
-    const backLight = new THREE.PointLight(0xffffff, 0.4);
-    backLight.position.set(0, 1, -3);
-    scene.add(backLight);
-    const rimLight = new THREE.PointLight(0xffaa66, 0.4);
-    rimLight.position.set(1.5, 1.2, -2.5);
-    scene.add(rimLight);
+    /* ── Lighting ────────────────────────────────────────────── */
+    /* Teal-tinted ambient — fills scene with the landing-page mood */
+    const ambient = new THREE.AmbientLight(0x183850, 3.0);
+    scene.add(ambient); lightRefs.current.ambient = ambient;
 
-    // Ground
-    const shadowPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(5, 5),
-      new THREE.ShadowMaterial({ opacity: 0.2, transparent: true })
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    keyLight.position.set(10, 20, 10);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.left   = -15; keyLight.shadow.camera.right = 15;
+    keyLight.shadow.camera.top    =  15; keyLight.shadow.camera.bottom = -15;
+    keyLight.shadow.bias = -0.001;
+    scene.add(keyLight); lightRefs.current.key = keyLight;
+
+    const fillLight = new THREE.DirectionalLight(0x4466aa, 0.8);
+    fillLight.position.set(-10, 5, -10);
+    scene.add(fillLight); lightRefs.current.fill = fillLight;
+
+    /* Teal rim from behind — primary source of teal floor reflection */
+    const rimLight = new THREE.DirectionalLight(0x00ffcc, 0.9);
+    rimLight.position.set(0, 10, -15);
+    scene.add(rimLight); lightRefs.current.rim = rimLight;
+
+    const neonL = new THREE.PointLight(0x00ffcc, 0.7, 24);
+    neonL.position.set(-8, 2, 0);
+    scene.add(neonL); lightRefs.current.neonL = neonL;
+
+    const neonR = new THREE.PointLight(0xff0077, 0.5, 24);
+    neonR.position.set(8, 2, 0);
+    scene.add(neonR); lightRefs.current.neonR = neonR;
+
+    /* Studio spotlight — creates the bright glow circle on the floor */
+    const topSpot = new THREE.SpotLight(0xffffff, 2.8, 20, Math.PI / 6, 0.45, 1.3);
+    topSpot.position.set(0, 10, 1);
+    topSpot.target.position.set(0, 0, 0);
+    scene.add(topSpot); scene.add(topSpot.target);
+
+    /* ── Environment ─────────────────────────────────────────── */
+    /* Floor — dark metallic so teal lights reflect off it */
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 100),
+      new THREE.MeshStandardMaterial({ color: 0x0a1e30, roughness: 0.14, metalness: 0.86 })
     );
-    shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.position.y = -0.55;
-    shadowPlane.receiveShadow = true;
-    scene.add(shadowPlane);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.55;
+    floor.receiveShadow = true;
+    scene.add(floor);
 
-    const grid = new THREE.GridHelper(5, 20, 0xcccccc, 0xaaaaaa);
-    grid.position.y = -0.55;
+    /* Neon teal grid — same as landing page */
+    const grid = new THREE.GridHelper(100, 32, 0x00ffcc, 0x001a10);
+    grid.position.y = -0.545;
+    grid.material.opacity = 0.22;
     grid.material.transparent = true;
-    grid.material.opacity = 0.3;
     scene.add(grid);
 
-    // ── Click handler for wheel raycasting ───────────────────────────────
-    const handleClick = (event) => {
-      if (!onWheelClickRef.current) return;
-      if (wheelMeshMapRef.current.size === 0) return;
+    /* Back wall — same colour as scene.background so sky is seamless */
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 32),
+      new THREE.MeshStandardMaterial({ color: 0x0e2840, roughness: 0.95 })
+    );
+    wall.position.set(0, 16, -22);
+    scene.add(wall);
 
+    // Volumetric ceiling beams
+    const beamGeo = new THREE.CylinderGeometry(0.03, 0.65, 16, 6, 1, true);
+    [-5, 0, 5].forEach((x, i) => {
+      const bm = new THREE.MeshBasicMaterial({
+        color: 0x00ffcc, transparent: true, opacity: 0.022, side: THREE.BackSide,
+      });
+      const beam = new THREE.Mesh(beamGeo, bm);
+      beam.position.set(x, 8, -5);
+      beamsRef.current.push(beam);
+      scene.add(beam);
+    });
+
+    // Dust / particle motes
+    const N = 160;
+    const dGeo = new THREE.BufferGeometry();
+    const dPos = new Float32Array(N * 3);
+    const dVel = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      dPos[i*3]   = (Math.random() - 0.5) * 22;
+      dPos[i*3+1] = Math.random() * 7;
+      dPos[i*3+2] = (Math.random() - 0.5) * 14;
+      dVel[i*3]   = (Math.random() - 0.5) * 0.008;
+      dVel[i*3+1] = Math.random() * 0.006 + 0.001;
+      dVel[i*3+2] = (Math.random() - 0.5) * 0.008;
+    }
+    dGeo.setAttribute("position", new THREE.BufferAttribute(dPos, 3));
+    const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({
+      color: 0x00ffcc, size: 0.032, transparent: true, opacity: 0.52,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    scene.add(dust);
+    dustRef.current = dust; dustPosRef.current = dPos; dustVelRef.current = dVel;
+
+    /* ── Wheel raycasting click ─────────────────────────────── */
+    const handleClick = (event) => {
+      if (!onWheelClickRef.current || wheelMeshMapRef.current.size === 0) return;
       const rect = renderer.domElement.getBoundingClientRect();
       mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
+      mouseRef.current.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(mouseRef.current, camera);
-
-      // Collect all descendant meshes of each wheel root node
-      const allWheelMeshes = [];
-      const meshToPosition = new Map();
-      for (const [posId, rootNode] of wheelMeshMapRef.current) {
-        rootNode.traverse((child) => {
-          if (child.isMesh) {
-            allWheelMeshes.push(child);
-            meshToPosition.set(child, posId);
-          }
-        });
+      const allWheelMeshes = []; const meshToPos = new Map();
+      for (const [posId, root] of wheelMeshMapRef.current) {
+        root.traverse(c => { if (c.isMesh) { allWheelMeshes.push(c); meshToPos.set(c, posId); } });
       }
-
-      // Also check custom replacement meshes
-      for (const [posId, customRoot] of customWheelsRef.current) {
-        if (customRoot) {
-          customRoot.traverse((child) => {
-            if (child.isMesh) {
-              allWheelMeshes.push(child);
-              meshToPosition.set(child, posId);
-            }
-          });
-        }
+      for (const [posId, root] of customWheelsRef.current) {
+        if (root) root.traverse(c => { if (c.isMesh) { allWheelMeshes.push(c); meshToPos.set(c, posId); } });
       }
-
-      const intersects = raycasterRef.current.intersectObjects(allWheelMeshes, false);
-      if (intersects.length > 0) {
-        const hitMesh = intersects[0].object;
-        const posId = meshToPosition.get(hitMesh);
-        if (posId) {
-          console.log("Wheel clicked:", posId);
-          onWheelClickRef.current(posId);
-        }
+      const hits = raycasterRef.current.intersectObjects(allWheelMeshes, false);
+      if (hits.length > 0) {
+        const posId = meshToPos.get(hits[0].object);
+        if (posId) onWheelClickRef.current(posId);
       }
     };
-
     renderer.domElement.addEventListener("click", handleClick);
 
-    // Animate
+    /* ── Animation loop ─────────────────────────────────────── */
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate);
-      controls.update();
+      const t = Date.now() * 0.001;
+
+      // Camera lerp for interior/exterior transition
+      if (cameraTransRef.current && lerpPosRef.current) {
+        camera.position.lerp(lerpPosRef.current, 0.065);
+        controls.target.lerp(lerpTargetRef.current, 0.065);
+        if (camera.position.distanceTo(lerpPosRef.current) < 0.008) {
+          camera.position.copy(lerpPosRef.current);
+          controls.target.copy(lerpTargetRef.current);
+          cameraTransRef.current = false;
+          controls.enabled = true;
+        }
+      } else {
+        controls.update();
+      }
+
+      // Dust motes
+      if (dustRef.current && dustPosRef.current) {
+        const pa = dustRef.current.geometry.attributes.position.array;
+        const vel = dustVelRef.current;
+        for (let i = 0; i < pa.length / 3; i++) {
+          pa[i*3]   += vel[i*3]   + Math.sin(t * 0.35 + i) * 0.0004;
+          pa[i*3+1] += vel[i*3+1];
+          pa[i*3+2] += vel[i*3+2] + Math.cos(t * 0.28 + i) * 0.0004;
+          if (pa[i*3+1] > 8)           pa[i*3+1] = 0.05;
+          if (Math.abs(pa[i*3])   > 11) vel[i*3]   *= -1;
+          if (Math.abs(pa[i*3+2]) > 7)  vel[i*3+2] *= -1;
+        }
+        dustRef.current.geometry.attributes.position.needsUpdate = true;
+      }
+
+      // Beam pulse
+      beamsRef.current.forEach((b, i) => {
+        b.material.opacity = 0.016 + Math.sin(t * 0.75 + i) * 0.009;
+      });
+
       renderer.render(scene, camera);
     };
     animate();
 
-    // Resize
+    /* ── Resize ─────────────────────────────────────────────── */
     const handleResize = () => {
-      const c = mountRef.current;
-      if (!c) return;
-      const w = c.clientWidth;
-      const h = c.clientHeight;
+      const c = mountRef.current; if (!c) return;
+      const w = c.clientWidth, h = c.clientHeight;
       if (!w || !h) return;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      camera.aspect = w / h; camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", handleResize);
@@ -483,606 +573,346 @@ const ThreeViewer = forwardRef(({
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener("resize", handleResize);
       renderer.domElement.removeEventListener("click", handleClick);
-      sceneRef.current = null;
-      cameraRef.current = null;
-      controlsRef.current = null;
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
-      rendererRef.current = null;
+      if (audioRef.current?.ctx) { try { audioRef.current.ctx.close(); } catch {} audioRef.current = null; }
+      sceneRef.current = null; cameraRef.current = null; controlsRef.current = null;
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+      renderer.dispose(); rendererRef.current = null;
+      dustRef.current = null; beamsRef.current = [];
     };
-  }, [backgroundColor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Model loading ──────────────────────────────────────────────────────
+  /* ════════════════════════════════════════════════════════════
+     MODEL LOADING
+  ════════════════════════════════════════════════════════════ */
   useEffect(() => {
-    if (!modelPath || !sceneRef.current) {
-      console.log("Model loading: No modelPath or scene ready");
-      return;
-    }
-
-    console.log("Model loading: Starting GLTFLoader for:", modelPath);
-    setLoading(true);
-    setError(null);
-
+    if (!modelPath || !sceneRef.current) return;
+    setLoading(true); setError(null);
     let isMounted = true;
     const loader = new GLTFLoader();
 
-    loader.load(
-      modelPath,
-      (gltf) => {
-        if (!isMounted || !sceneRef.current) return;
+    loader.load(modelPath, (gltf) => {
+      if (!isMounted || !sceneRef.current) return;
 
-        console.log("Model loading: GLTF loaded successfully");
+      if (modelRef.current) { sceneRef.current.remove(modelRef.current); modelRef.current = null; }
+      wheelMeshMapRef.current = new Map();
+      originalWheelDataRef.current = new Map();
+      customWheelsRef.current.forEach(cw => { if (cw?.parent) cw.parent.remove(cw); });
+      customWheelsRef.current = new Map();
 
-        // Clean up previous model
-        if (modelRef.current) {
-          sceneRef.current.remove(modelRef.current);
-          modelRef.current = null;
+      const model = gltf.scene;
+      model.traverse(node => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+          // ── Material enhancement for showroom look ──
+          const mats = Array.isArray(node.material) ? node.material : [node.material];
+          mats.forEach(m => {
+            if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) {
+              const n = (node.name || "").toLowerCase();
+              const isGlass = n.includes("glass") || n.includes("window") || n.includes("windshield");
+              if (!isGlass) {
+                m.roughness   = Math.min(m.roughness, 0.22);
+                m.metalness   = Math.max(m.metalness, 0.68);
+                m.needsUpdate = true;
+              } else {
+                // Improve glass transparency
+                m.transparent = true;
+                m.opacity     = Math.min(m.opacity || 1, 0.35);
+                m.roughness   = 0;
+                m.metalness   = 0.1;
+                m.needsUpdate = true;
+              }
+            }
+          });
         }
-        // Clear wheel refs
-        wheelMeshMapRef.current = new Map();
-        originalWheelDataRef.current = new Map();
-        customWheelsRef.current.forEach((cw) => { if (cw?.parent) cw.parent.remove(cw); });
-        customWheelsRef.current = new Map();
+      });
 
-        const model = gltf.scene;
-        model.traverse((node) => {
-          if (node.isMesh) {
-            node.castShadow = true;
-            node.receiveShadow = true;
-          }
-        });
+      const box    = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size   = box.getSize(new THREE.Vector3());
+      const scale  = 1.8 / Math.max(size.x, size.y, size.z);
+      model.scale.setScalar(scale);
+      model.position.set(-center.x * scale, -box.min.y * scale - 0.45, -center.z * scale);
 
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const scale = 1.8 / Math.max(size.x, size.y, size.z);
-        model.scale.setScalar(scale);
-        model.position.set(
-          -center.x * scale,
-          -box.min.y * scale - 0.45,
-          -center.z * scale
-        );
+      sceneRef.current.add(model);
+      modelRef.current = model;
 
-        sceneRef.current.add(model);
-        modelRef.current = model;
-
-        // ── Discover part meshes ──────────────────────────────────────
-        // Wait one frame so world matrices are updated after scaling/positioning
-        requestAnimationFrame(() => {
-          model.updateMatrixWorld(true);
-
-          // WHEELS
-          const posMap = discoverWheelMeshes(model);
-          wheelMeshMapRef.current = posMap;
-          for (const [posId, node] of posMap) {
-            originalWheelDataRef.current.set(posId, {
-              position: node.position.clone(),
-              quaternion: node.quaternion.clone(),
-              scale: node.scale.clone(),
-              parent: node.parent,
-              visible: node.visible,
-            });
-          }
-
-          // SPOILER
-          const spoilerResult = discoverSpoilerMesh(model);
-          if (spoilerResult.mesh) {
-            const { mesh: spoilerNode, isExistingSpoiler } = spoilerResult;
-            originalSpoilerRef.current = spoilerNode;
-            originalSpoilerDataRef.current = {
-              position: spoilerNode.position.clone(),
-              quaternion: spoilerNode.quaternion.clone(),
-              scale: spoilerNode.scale.clone(),
-              parent: spoilerNode.parent,
-              visible: spoilerNode.visible,
-              isExistingSpoiler,
-            };
-            console.log("Spoiler anchor stored:", spoilerNode.name);
-          }
-        });
-
-        // Apply initial color (body meshes only)
-        if (modelColor) {
-          applyColorToPaintableMeshes(model, modelColor);
+      requestAnimationFrame(() => {
+        model.updateMatrixWorld(true);
+        const posMap = discoverWheelMeshes(model);
+        wheelMeshMapRef.current = posMap;
+        for (const [posId, node] of posMap) {
+          originalWheelDataRef.current.set(posId, {
+            position: node.position.clone(), quaternion: node.quaternion.clone(),
+            scale: node.scale.clone(), parent: node.parent, visible: node.visible,
+          });
         }
-
-        if (controlsRef.current) {
-          controlsRef.current.target.set(0, 0.3, 0);
-          controlsRef.current.update();
+        const spoilerResult = discoverSpoilerMesh(model);
+        if (spoilerResult.mesh) {
+          const { mesh: sn, isExistingSpoiler } = spoilerResult;
+          originalSpoilerRef.current = sn;
+          originalSpoilerDataRef.current = {
+            position: sn.position.clone(), quaternion: sn.quaternion.clone(),
+            scale: sn.scale.clone(), parent: sn.parent, visible: sn.visible, isExistingSpoiler,
+          };
         }
+      });
 
-        setLoading(false);
-      },
-      (progress) => {
-        console.log("Model loading: Progress:", progress);
-      },
-      (err) => {
-        console.error("Model loading: Error loading model:", err);
-        if (!isMounted) return;
-        setError(`Failed to load model: ${err.message}`);
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      isMounted = false;
-    };
-  }, [modelPath]);
-
-  useEffect(() => {
-    if (!modelColor) return;
-
-    // 1. Apply to main chassis
-    if (modelRef.current) {
-      applyColorToPaintableMeshes(modelRef.current, modelColor);
-    }
-
-    // 2. Apply to modular parts (Bumpers, Hoods, etc.)
-    modularPartsRef.current.forEach((part) => {
-      applyColorToPaintableMeshes(part, modelColor);
+      if (modelColor) applyColorToPaintableMeshes(model, modelColor);
+      if (controlsRef.current) { controlsRef.current.target.copy(EXT_TARGET); controlsRef.current.update(); }
+      setLoading(false);
+    },
+    undefined,
+    (err) => {
+      if (!isMounted) return;
+      setError(`Failed to load model: ${err.message}`);
+      setLoading(false);
     });
 
-    // 3. Apply to custom spoiler
-    if (customSpoilerRef.current) {
-      applyColorToPaintableMeshes(customSpoilerRef.current, modelColor);
-    }
+    return () => { isMounted = false; };
+  }, [modelPath]);
+
+  /* ── Color effect ───────────────────────────────────────── */
+  useEffect(() => {
+    if (!modelColor) return;
+    if (modelRef.current) applyColorToPaintableMeshes(modelRef.current, modelColor);
+    modularPartsRef.current.forEach(p => applyColorToPaintableMeshes(p, modelColor));
+    if (customSpoilerRef.current) applyColorToPaintableMeshes(customSpoilerRef.current, modelColor);
   }, [modelColor]);
 
-  // ── Wheel replacement effect ──────────────────────────────────────────────
+  /* ── Wheel replacement effect ───────────────────────────── */
   useEffect(() => {
-    if (!sceneRef.current) return;
-    console.log("[Wheels] Replacement requested for:", wheelReplacements);
-    if (wheelMeshMapRef.current.size === 0) {
-      console.error("[Wheels] Cannot apply wheels: No wheel meshes or anchors were discovered in the car model!");
-      return;
-    }
-
+    if (!sceneRef.current || wheelMeshMapRef.current.size === 0) return;
     const loader = new GLTFLoader();
 
     for (const [posId, wheelUrl] of Object.entries(wheelReplacements)) {
-      console.log(`[Wheels] Processing position: ${posId} | URL: ${wheelUrl}`);
       const originalData = originalWheelDataRef.current.get(posId);
       const originalMesh = wheelMeshMapRef.current.get(posId);
+      if (!originalMesh || !originalData) continue;
 
-      if (!originalMesh || !originalData) {
-        console.warn(`[Wheels] Skipping ${posId}: No anchor/mesh found in model.`);
-        continue;
-      }
-
-      // Remove existing custom wheel for this position (if any)
       const existingCustom = customWheelsRef.current.get(posId);
-      if (existingCustom) {
-        if (existingCustom.parent) existingCustom.parent.remove(existingCustom);
-        customWheelsRef.current.delete(posId);
-      }
+      if (existingCustom) { if (existingCustom.parent) existingCustom.parent.remove(existingCustom); customWheelsRef.current.delete(posId); }
 
-      if (!wheelUrl) {
-        // Reset: show original wheel
-        originalMesh.visible = true;
-        originalMesh.traverse((child) => { child.visible = true; });
-        continue;
-      }
+      if (!wheelUrl) { originalMesh.visible = true; originalMesh.traverse(c => { c.visible = true; }); continue; }
 
-      originalMesh.traverse((child) => { child.visible = true; });
+      originalMesh.traverse(c => { c.visible = true; });
       originalMesh.updateMatrixWorld(true);
-
-      // Measure the original space (anchor or existing wheel)
       const origBox = new THREE.Box3().setFromObject(originalMesh);
-      const origSize = new THREE.Vector3();
-      origBox.getSize(origSize);
-
-      // If it's a virtual anchor (no size), use its world position directly
+      const origSize = new THREE.Vector3(); origBox.getSize(origSize);
       let origCenter = new THREE.Vector3();
-      if (origSize.length() < 0.01) {
-        originalMesh.getWorldPosition(origCenter);
-      } else {
-        origBox.getCenter(origCenter);
-      }
+      if (origSize.length() < 0.01) originalMesh.getWorldPosition(origCenter);
+      else origBox.getCenter(origCenter);
+      originalMesh.visible = false; originalMesh.traverse(c => { c.visible = false; });
 
-      // NOW hide original wheel
-      originalMesh.visible = false;
-      originalMesh.traverse((child) => { child.visible = false; });
-
-      // Load the replacement wheel
-      console.log(`[${posId}] Loading custom wheel from:`, wheelUrl);
-      loader.load(
-        wheelUrl,
-        (gltf) => {
-          if (!sceneRef.current) return;
-
-          const customWheel = gltf.scene;
-          console.log(`[${posId}] Custom wheel GLTF loaded successfully`);
-
-          // Enable shadows
-          customWheel.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
-
-          // Measure sizes
-          const customBox = new THREE.Box3().setFromObject(customWheel);
-          const customSize = customBox.getSize(new THREE.Vector3());
-          const customCenter = customBox.getCenter(new THREE.Vector3());
-
-          // Calculate fit scale based on height (Y-axis) to match original wheel diameter
-          let finalScale = 1;
-          const targetSizeY = origSize.y > 0 ? origSize.y : 0.26; // Smaller diameter (0.26 instead of 0.38)
-
-          if (customSize.y > 0) {
-            finalScale = targetSizeY / customSize.y;
-          }
-
-          const parentWorldScale = new THREE.Vector3(1, 1, 1);
-          if (originalData.parent) {
-            originalData.parent.getWorldScale(parentWorldScale);
-          }
-
-          // Set scale, compensating for parent's world scale
-          customWheel.scale.setScalar(finalScale / parentWorldScale.y);
-
-          // Copy rotation
-          customWheel.quaternion.copy(originalData.quaternion);
-
-          // Mirror rotation so rims face OUTWARD
-          // If the wheel faces inward, we flip the side logic here
-          if (posId.includes("left")) {
-            customWheel.rotateY(Math.PI);
-          }
-
-          // Add to parent (or scene if it's a virtual anchor)
-          const attachmentParent = originalMesh.parent || sceneRef.current;
-          if (attachmentParent) {
-            attachmentParent.add(customWheel);
-          }
-
-          // Positioning: Align centers in world space
-          customWheel.updateMatrixWorld(true);
-          const newCustomBox = new THREE.Box3().setFromObject(customWheel);
-          const newCustomCenter = newCustomBox.getCenter(new THREE.Vector3());
-          const worldOffset = new THREE.Vector3().subVectors(origCenter, newCustomCenter);
-
-          customWheel.position.add(new THREE.Vector3(
-            worldOffset.x / parentWorldScale.x,
-            worldOffset.y / parentWorldScale.y,
-            worldOffset.z / parentWorldScale.z
-          ));
-
-          customWheelsRef.current.set(posId, customWheel);
-          console.log(`[${posId}] Replaced with scale ${finalScale}`);
-          console.log(`[${posId}] Replacement wheel added to scene`);
-        },
-        undefined,
-        (err) => {
-          console.error(`[${posId}] Failed to load custom wheel:`, err);
-          // Restore original on failure
-          originalMesh.visible = true;
-          originalMesh.traverse((child) => { child.visible = true; });
-        }
-      );
+      loader.load(wheelUrl, (gltf) => {
+        if (!sceneRef.current) return;
+        const cw = gltf.scene;
+        cw.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+        const cb = new THREE.Box3().setFromObject(cw);
+        const cs = cb.getSize(new THREE.Vector3());
+        const targetSizeY = origSize.y > 0 ? origSize.y : 0.26;
+        const finalScale  = cs.y > 0 ? targetSizeY / cs.y : 1;
+        const pws = new THREE.Vector3(1, 1, 1);
+        if (originalData.parent) originalData.parent.getWorldScale(pws);
+        cw.scale.setScalar(finalScale / pws.y);
+        cw.quaternion.copy(originalData.quaternion);
+        if (posId.includes("left")) cw.rotateY(Math.PI);
+        const ap = originalMesh.parent || sceneRef.current;
+        if (ap) ap.add(cw);
+        cw.updateMatrixWorld(true);
+        const ncb = new THREE.Box3().setFromObject(cw);
+        const ncc = ncb.getCenter(new THREE.Vector3());
+        const wOff = new THREE.Vector3().subVectors(origCenter, ncc);
+        cw.position.add(new THREE.Vector3(wOff.x / pws.x, wOff.y / pws.y, wOff.z / pws.z));
+        customWheelsRef.current.set(posId, cw);
+      }, undefined, () => { originalMesh.visible = true; originalMesh.traverse(c => { c.visible = true; }); });
     }
   }, [wheelReplacements]);
 
-  // ── Modular Part Attachment Effect ─────────────────────────────────────────
+  /* ── Modular part effect ────────────────────────────────── */
   useEffect(() => {
     if (!sceneRef.current || !modelRef.current) return;
-
     const loader = new GLTFLoader();
-
-    // 1. Determine what needs to be added or removed
-    const currentSlots = Object.keys(currentBuild);
-    const loadedSlots = Array.from(modularPartsRef.current.keys());
-
-    // Cleanup: Remove slots that are no longer in the build or have changed to null
-    loadedSlots.forEach(slotKey => {
+    Array.from(modularPartsRef.current.keys()).forEach(slotKey => {
       if (!currentBuild[slotKey]) {
-        const oldPart = modularPartsRef.current.get(slotKey);
-        if (oldPart?.parent) oldPart.parent.remove(oldPart);
+        const old = modularPartsRef.current.get(slotKey);
+        if (old?.parent) old.parent.remove(old);
         modularPartsRef.current.delete(slotKey);
       }
     });
-
-    // Load/Update: Iterate through current build
-    currentSlots.forEach(slotKey => {
-      const partUrl = currentBuild[slotKey];
-      if (!partUrl) return;
-
-      // Skip if this specific URL is already loaded in this slot
+    Object.keys(currentBuild).forEach(slotKey => {
+      const partUrl = currentBuild[slotKey]; if (!partUrl) return;
       if (modularPartsRef.current.get(slotKey)?.userData?.url === partUrl) return;
-
-      console.log(`[Modular] Attaching part to slot: ${slotKey} | URL: ${partUrl}`);
-
       loader.load(partUrl, (gltf) => {
         if (!modelRef.current) return;
-
-        const newPart = gltf.scene;
-        newPart.userData.url = partUrl;
-
-        // Find Anchor Point in the Chassis
+        const newPart = gltf.scene; newPart.userData.url = partUrl;
         let anchor = null;
-
-        // Try various naming patterns for the anchor
-        const possibleNames = [
-          `pos_${slotKey}`,
-          `anchor_${slotKey}`,
-          `POS_${slotKey}`,
-          `ANCHOR_${slotKey}`,
-          slotKey
-        ];
-
-        modelRef.current.traverse(node => {
-          if (!anchor && possibleNames.includes(node.name)) {
-            anchor = node;
-          }
-        });
-
-        // If no specific anchor found, try a fuzzy search
-        if (!anchor) {
-          modelRef.current.traverse(node => {
-            if (!anchor && node.name.toLowerCase().includes(slotKey.toLowerCase())) {
-              anchor = node;
-            }
-          });
-        }
-
-        if (anchor) {
-          console.log(`[Modular] Found anchor for ${slotKey}: ${anchor.name}`);
-
-          // Remove old part before adding new one
-          const oldPart = modularPartsRef.current.get(slotKey);
-          if (oldPart?.parent) oldPart.parent.remove(oldPart);
-
-          // Enable shadows
-          newPart.traverse(child => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
-
-          // Match Anchor Transform
-          anchor.add(newPart);
-          newPart.position.set(0, 0, 0);
-          newPart.quaternion.set(0, 0, 0, 1);
-          newPart.scale.set(1, 1, 1);
-
-          modularPartsRef.current.set(slotKey, newPart);
-
-          // Apply current body paint to the new modular part
-          if (modelColor) {
-            applyColorToPaintableMeshes(newPart, modelColor);
-          }
-        } else {
-          console.warn(`[Modular] No anchor point found for slot: ${slotKey}. Part may not appear correctly.`);
-          // As a fallback, just add to the model center
-          modelRef.current.add(newPart);
-          modularPartsRef.current.set(slotKey, newPart);
-          
-          if (modelColor) {
-            applyColorToPaintableMeshes(newPart, modelColor);
-          }
-        }
+        const names = [`pos_${slotKey}`, `anchor_${slotKey}`, `POS_${slotKey}`, `ANCHOR_${slotKey}`, slotKey];
+        modelRef.current.traverse(n => { if (!anchor && names.includes(n.name)) anchor = n; });
+        if (!anchor) modelRef.current.traverse(n => { if (!anchor && n.name.toLowerCase().includes(slotKey.toLowerCase())) anchor = n; });
+        const old = modularPartsRef.current.get(slotKey);
+        if (old?.parent) old.parent.remove(old);
+        newPart.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+        if (anchor) { anchor.add(newPart); newPart.position.set(0,0,0); newPart.quaternion.set(0,0,0,1); newPart.scale.set(1,1,1); }
+        else modelRef.current.add(newPart);
+        modularPartsRef.current.set(slotKey, newPart);
+        if (modelColor) applyColorToPaintableMeshes(newPart, modelColor);
       });
     });
-
   }, [currentBuild]);
-  useEffect(() => {
-    if (!sceneRef.current) return;
-    if (!originalSpoilerRef.current || !originalSpoilerDataRef.current) return;
 
+  /* ── Spoiler effect ─────────────────────────────────────── */
+  useEffect(() => {
+    if (!sceneRef.current || !originalSpoilerRef.current || !originalSpoilerDataRef.current) return;
     const loader = new GLTFLoader();
     const originalMesh = originalSpoilerRef.current;
     const originalData = originalSpoilerDataRef.current;
-
-    // Remove existing custom spoiler
-    if (customSpoilerRef.current) {
-      if (customSpoilerRef.current.parent) {
-        customSpoilerRef.current.parent.remove(customSpoilerRef.current);
-      }
-      customSpoilerRef.current = null;
-    }
-
-    if (!spoilerReplacement) {
-      // Reset: show original spoiler if it was a spoiler, or just ensure anchor is visible
-      originalMesh.visible = originalData.visible;
-      originalMesh.traverse((child) => { child.visible = true; });
-      return;
-    }
-
-    // Hide original ONLY if it was actually a spoiler
-    if (originalData.isExistingSpoiler) {
-      originalMesh.visible = false;
-      originalMesh.traverse((child) => { child.visible = false; });
-    } else {
-      // If it's a trunk, ensure it stays visible
-      originalMesh.visible = true;
-      originalMesh.traverse((child) => { child.visible = true; });
-    }
-
-    // Load replacement
-    console.log("Loading custom spoiler from:", spoilerReplacement);
-    loader.load(
-      spoilerReplacement,
-      (gltf) => {
-        if (!sceneRef.current) return;
-
-        const customSpoiler = gltf.scene;
-        console.log("Custom spoiler GLTF loaded successfully");
-
-        // Enable shadows
-        customSpoiler.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-
-        // ── Align centers ──
-        // Ensure original is temporarily visible/updated for correct bbox
-        const wasVisible = originalMesh.visible;
-        originalMesh.visible = true;
-        originalMesh.updateMatrixWorld(true);
-
-        const origBox = new THREE.Box3().setFromObject(originalMesh);
-        const origCenter = origBox.getCenter(new THREE.Vector3());
-        const origSize = origBox.getSize(new THREE.Vector3());
-
-        originalMesh.visible = wasVisible;
-
-        // Add to same parent or scene
-        if (originalData.parent) {
-          originalData.parent.add(customSpoiler);
-        } else {
-          sceneRef.current.add(customSpoiler);
-        }
-
-        // Reset transforms to identity before computing offset
-        customSpoiler.position.set(0, 0, 0);
-        customSpoiler.quaternion.set(0, 0, 0, 1);
-        customSpoiler.scale.set(1, 1, 1);
-        customSpoiler.updateMatrixWorld(true);
-
-        // 1. Orientation & Scale Adjustment
-        // We find the dimensions of the spoiler and ensure its "longest horizontal side" 
-        // aligns with the car's width (X-axis).
-        const tempBox = new THREE.Box3().setFromObject(customSpoiler);
-        const tempSize = tempBox.getSize(new THREE.Vector3());
-
-        // If it's deeper than it is wide, it's probably sideways. Rotate 90 deg.
-        if (tempSize.z > tempSize.x) {
-          console.log("[Spoiler] Model appears sideways. Rotating 90 degrees.");
-          customSpoiler.rotateY(Math.PI / 2);
-          customSpoiler.updateMatrixWorld(true);
-        }
-
-        const customBox = new THREE.Box3().setFromObject(customSpoiler);
-        const customSize = customBox.getSize(new THREE.Vector3());
-        const targetWidth = origSize.x * 0.85; // Target ~85% of trunk width
-
-        // Use X (width) for scaling after ensuring correct rotation
-        const scaleFactor = targetWidth / (customSize.x || 1);
-        const finalScale = Math.min(scaleFactor, 100.0);
-
-        customSpoiler.scale.setScalar(finalScale);
-        console.log(`[Spoiler] Scaling: ${finalScale.toFixed(4)} (Target width: ${targetWidth.toFixed(4)})`);
-
-        // 2. Position Alignment (World Space)
-        customSpoiler.updateMatrixWorld(true);
-        const currentCustomBox = new THREE.Box3().setFromObject(customSpoiler);
-        const currentCustomCenter = currentCustomBox.getCenter(new THREE.Vector3());
-
-        // Move to anchor center (World space)
-        const worldOffset = new THREE.Vector3().subVectors(origCenter, currentCustomCenter);
-
-        // Convert world offset to parent local space
-        const parentWorldScale = new THREE.Vector3(1, 1, 1);
-        const parentWorldQuaternion = new THREE.Quaternion();
-        if (customSpoiler.parent) {
-          customSpoiler.parent.getWorldScale(parentWorldScale);
-          customSpoiler.parent.getWorldQuaternion(parentWorldQuaternion);
-        }
-
-        // Apply translation (World-to-Local)
-        const invQuaternion = parentWorldQuaternion.clone().invert();
-        const localOffset = worldOffset.clone().applyQuaternion(invQuaternion);
-
-        customSpoiler.position.add(new THREE.Vector3(
-          localOffset.x / parentWorldScale.x,
-          localOffset.y / parentWorldScale.y,
-          localOffset.z / parentWorldScale.z
-        ));
-
-        // 3. Lock to Top Surface
-        customSpoiler.updateMatrixWorld(true);
-        const updatedCustomBox = new THREE.Box3().setFromObject(customSpoiler);
-
-        const targetTopY = origBox.max.y;
-        const spoilerBottomY = updatedCustomBox.min.y;
-        console.log(`[Spoiler] Aligning: Trunk Top Y = ${targetTopY.toFixed(4)}, Spoiler Bottom Y = ${spoilerBottomY.toFixed(4)}`);
-
-        // Add a 0.08 world-unit gap to sit clearly above the surface
-        const yCorrectionWorld = (targetTopY - spoilerBottomY) + 0.08;
-
-        // Apply Y correction in local space (World-to-Local)
-        const invQuaternionY = parentWorldQuaternion.clone().invert();
-        const localYCorrection = new THREE.Vector3(0, yCorrectionWorld, 0).applyQuaternion(invQuaternionY);
-        customSpoiler.position.y += (localYCorrection.y / parentWorldScale.y);
-
-        // 4. Positional Adjustment (Move to rear edge)
-        // Adjust this factor if it sits too far forward or back
-        const zShift = (origSize.z * 0.0) / parentWorldScale.z;
-        customSpoiler.position.z += zShift;
-
-        customSpoilerRef.current = customSpoiler;
-        
-        // Apply current body paint to the new spoiler
-        if (modelColor) {
-          applyColorToPaintableMeshes(customSpoiler, modelColor);
-        }
-        
-        console.log(`Spoiler placed on ${originalMesh.name} at Y: ${customSpoiler.position.y}`);
-      },
-      undefined,
-      (err) => {
-        console.error("Failed to load custom spoiler:", err);
-        originalMesh.visible = true;
-        originalMesh.traverse((child) => { child.visible = true; });
-      }
-    );
+    if (customSpoilerRef.current) { if (customSpoilerRef.current.parent) customSpoilerRef.current.parent.remove(customSpoilerRef.current); customSpoilerRef.current = null; }
+    if (!spoilerReplacement) { originalMesh.visible = originalData.visible; originalMesh.traverse(c => { c.visible = true; }); return; }
+    if (originalData.isExistingSpoiler) { originalMesh.visible = false; originalMesh.traverse(c => { c.visible = false; }); }
+    else { originalMesh.visible = true; originalMesh.traverse(c => { c.visible = true; }); }
+    loader.load(spoilerReplacement, (gltf) => {
+      if (!sceneRef.current) return;
+      const cs = gltf.scene;
+      cs.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+      const wasVisible = originalMesh.visible; originalMesh.visible = true; originalMesh.updateMatrixWorld(true);
+      const origBox = new THREE.Box3().setFromObject(originalMesh);
+      const origCenter = origBox.getCenter(new THREE.Vector3());
+      const origSize   = origBox.getSize(new THREE.Vector3());
+      originalMesh.visible = wasVisible;
+      if (originalData.parent) originalData.parent.add(cs); else sceneRef.current.add(cs);
+      cs.position.set(0,0,0); cs.quaternion.set(0,0,0,1); cs.scale.set(1,1,1); cs.updateMatrixWorld(true);
+      const tb = new THREE.Box3().setFromObject(cs); const ts = tb.getSize(new THREE.Vector3());
+      if (ts.z > ts.x) { cs.rotateY(Math.PI / 2); cs.updateMatrixWorld(true); }
+      const cb2 = new THREE.Box3().setFromObject(cs); const cs2 = cb2.getSize(new THREE.Vector3());
+      const targetW = origSize.x * 0.85; const sf = Math.min(targetW / (cs2.x || 1), 100);
+      cs.scale.setScalar(sf); cs.updateMatrixWorld(true);
+      const ccb = new THREE.Box3().setFromObject(cs); const ccc = ccb.getCenter(new THREE.Vector3());
+      const wOff = new THREE.Vector3().subVectors(origCenter, ccc);
+      const pws = new THREE.Vector3(1,1,1); const pwq = new THREE.Quaternion();
+      if (cs.parent) { cs.parent.getWorldScale(pws); cs.parent.getWorldQuaternion(pwq); }
+      const invQ = pwq.clone().invert(); const lOff = wOff.clone().applyQuaternion(invQ);
+      cs.position.add(new THREE.Vector3(lOff.x/pws.x, lOff.y/pws.y, lOff.z/pws.z));
+      cs.updateMatrixWorld(true);
+      const ub = new THREE.Box3().setFromObject(cs);
+      const yCorr = (origBox.max.y - ub.min.y) + 0.08;
+      const invQY = pwq.clone().invert(); const lY = new THREE.Vector3(0, yCorr, 0).applyQuaternion(invQY);
+      cs.position.y += lY.y / pws.y;
+      customSpoilerRef.current = cs;
+      if (modelColor) applyColorToPaintableMeshes(cs, modelColor);
+    }, undefined, () => { originalMesh.visible = true; originalMesh.traverse(c => { c.visible = true; }); });
   }, [spoilerReplacement]);
 
-  const overlayBg = backgroundColor === "transparent" ? "rgba(0,0,0,0.4)" : backgroundColor;
-
+  /* ════════════════════════════════════════════════════════════
+     RENDER
+  ════════════════════════════════════════════════════════════ */
   return (
-    <Box
-      sx={{
-        width: "100%",
-        height: "100%",
-        minHeight: 450,
-        position: "relative",
-        ...sx,
-      }}
-    >
+    <Box sx={{ width: "100%", height: "100%", minHeight: 450, position: "relative", ...sx }}>
       <Box ref={mountRef} sx={{ width: "100%", height: "100%", minHeight: 450 }} />
 
-      {/* Loading overlay */}
-      {loading && !error && (
+      {/* ── Canvas overlay controls ─────────────────────────── */}
+
+      {/* Bottom-left: dim + sound */}
+      {!loading && !error && (
+        <Box sx={{ position: "absolute", bottom: 16, left: 16, display: "flex", gap: 1, zIndex: 10 }}>
+          <CanvasBtn onClick={handleDim} active={isDimmed}>
+            {isDimmed ? "ILLUMINATE" : "DIM"}
+          </CanvasBtn>
+          <CanvasBtn onClick={handleMute} active={isMuted}>
+            {isMuted ? "UNMUTE" : "SOUND"}
+          </CanvasBtn>
+        </Box>
+      )}
+
+      {/* Right edge: interior indicator */}
+      {!loading && !error && !isInterior && (
         <Box
+          onClick={handleInteriorToggle}
           sx={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            background: overlayBg,
-            zIndex: 2,
+            position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+            zIndex: 10, cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8,
+            py: 2, px: 1,
+            background: GB,
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            borderLeft: `1px solid ${GBR}`,
+            borderTop: `1px solid ${GBR}`,
+            borderBottom: `1px solid ${GBR}`,
+            transition: "all .25s",
+            "&:hover": { background: "rgba(0,255,204,.1)", borderColor: CP },
           }}
         >
-          <CircularProgress size={32} sx={{ color: "#2c5364" }} />
-          <Typography sx={{ color: backgroundColor === "transparent" ? "#fff" : "#6b7c88", fontSize: 14 }}>
-            Loading 3D Model…
+          <Typography sx={{
+            fontFamily: FD, fontSize: "0.55rem", fontWeight: 700,
+            letterSpacing: "0.15em", color: CP,
+            writingMode: "vertical-rl", textOrientation: "mixed",
+          }}>
+            INTERIOR
+          </Typography>
+          <Typography sx={{ color: CP, fontSize: "0.85rem", lineHeight: 1 }}>&#8594;</Typography>
+        </Box>
+      )}
+
+      {/* Top-center: back to exterior */}
+      {!loading && !error && isInterior && (
+        <Box
+          onClick={handleInteriorToggle}
+          sx={{
+            position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
+            zIndex: 10, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 1,
+            px: 2, py: 0.8,
+            background: GB,
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            border: `1px solid ${GBR}`,
+            transition: "all .25s",
+            "&:hover": { background: "rgba(0,255,204,.1)", borderColor: CP },
+          }}
+        >
+          <Typography sx={{ color: CP, fontSize: "0.85rem", lineHeight: 1 }}>&#8592;</Typography>
+          <Typography sx={{
+            fontFamily: FD, fontSize: "0.58rem", fontWeight: 700,
+            letterSpacing: "0.14em", color: CP,
+          }}>
+            EXTERIOR VIEW
           </Typography>
         </Box>
       )}
 
+      {/* Loading overlay */}
+      {loading && !error && (
+        <Box sx={{
+          position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 2,
+          background: "rgba(5,8,17,.85)", zIndex: 20,
+        }}>
+          <Typography sx={{ fontFamily: FD, fontSize: "0.72rem", color: CP, letterSpacing: "0.2em" }}>
+            LOADING MODEL…
+          </Typography>
+          <Box sx={{ width: 180, height: 2, background: "rgba(0,255,204,.15)", overflow: "hidden" }}>
+            <Box sx={{
+              height: "100%", width: "40%", background: CP, boxShadow: `0 0 8px ${CP}`,
+              animation: "slideLoad 1.2s ease-in-out infinite",
+              "@keyframes slideLoad": {
+                "0%":   { transform: "translateX(-100%)" },
+                "100%": { transform: "translateX(350%)" },
+              },
+            }} />
+          </Box>
+        </Box>
+      )}
+
+      {/* Error overlay */}
       {error && (
-        <Box
-          sx={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: overlayBg,
-            zIndex: 2,
-          }}
-        >
-          <Typography color="error" sx={{ px: 3, textAlign: "center" }}>
+        <Box sx={{
+          position: "absolute", inset: 0, display: "flex",
+          alignItems: "center", justifyContent: "center",
+          background: "rgba(5,8,17,.85)", zIndex: 20,
+        }}>
+          <Typography color="error" sx={{ px: 3, textAlign: "center", fontFamily: FD, fontSize: "0.72rem" }}>
             {error}
           </Typography>
         </Box>
@@ -1091,4 +921,5 @@ const ThreeViewer = forwardRef(({
   );
 });
 
+ThreeViewer.displayName = "ThreeViewer";
 export default ThreeViewer;

@@ -3,181 +3,151 @@ import { useEffect, useState, useRef } from "react";
 import { Box, Typography, Button } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
 import PartSelector from "./components/PartSelector";
-import OptionsPanel from "./components/OptionsPanel";
 import AiChatbox from "./components/AiChatbox";
 import apiClient from "@/lib/axios";
 import { useSearchParams } from "next/navigation";
+
+/* ── Design tokens ───────────────────────────────────────────── */
+const T = {
+  cp:  "#00ffcc",
+  cs:  "#ff0077",
+  ca:  "#ffcc00",
+  bg:  "#0e2840",
+  txt: "#e8eaf6",
+  gb:  "rgba(10,14,30,.72)",
+  gbr: "rgba(0,255,204,.14)",
+};
+
+const glass = {
+  background: T.gb,
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
+  border: `1px solid ${T.gbr}`,
+};
+
+/* Static categories always present */
+const STATIC_CATEGORIES = [
+  { id: "body",     name: "BODY PAINT", icon: "◉" },
+  { id: "interior", name: "INTERIOR",   icon: "◈" },
+  { id: "lighting", name: "LIGHTING",   icon: "◑" },
+  { id: "sound",    name: "SOUND",      icon: "◎" },
+];
 
 export default function CustomizePage() {
   const searchParams = useSearchParams();
   const carId = searchParams.get("carId");
 
-  const viewerRef = useRef(null); // Ref to access ThreeViewer functions
-  const [selectedPart, setSelectedPart] = useState("body");
+  const viewerRef = useRef(null);
+  const [selectedPart, setSelectedPart]   = useState("body");
   const [selectedColor, setSelectedColor] = useState("#1e3a5f");
-  
-  // Dynamic Categories from DB
-  const [categories, setCategories] = useState([
-    { id: "body", name: "BODY PAINT", icon: "●" } // Always show body paint
-  ]);
+
+  const [categories, setCategories]       = useState(STATIC_CATEGORIES);
   const [availableParts, setAvailableParts] = useState({});
 
   const [wheels, setWheels] = useState({
     "front-left": null, "front-right": null, "rear-left": null, "rear-right": null,
   });
   const [activeWheelPosition, setActiveWheelPosition] = useState(null);
-  const [selectedSpoiler, setSelectedSpoiler] = useState(null);
+  const [selectedSpoiler, setSelectedSpoiler]         = useState(null);
+  const [currentBuild, setCurrentBuild]               = useState({});
 
-  // The "Current Build" state tracks all equipped modular parts
-  const [currentBuild, setCurrentBuild] = useState({});
+  const [designId, setDesignId]   = useState(searchParams.get("designId") || null);
+  const [saveStatus, setSaveStatus] = useState("saved");
 
-  // Draft management state
-  const [designId, setDesignId] = useState(searchParams.get("designId") || null);
-  const [saveStatus, setSaveStatus] = useState("saved"); // 'saved', 'saving', 'error'
-
-  const handlePartSelect = (category, url, slot) => {
-    // If a specific slot is provided (e.g. "Front_Bumper"), use it.
-    // Otherwise, use the category name.
-    const key = slot || category;
-    setCurrentBuild(prev => ({ ...prev, [key]: url }));
-    
-    // Legacy support for spoiler
-    if (category.toLowerCase() === "spoiler") {
-      setSelectedSpoiler(url);
-    }
-  };
-
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [modelData, setModelData] = useState(null);
-  const [modelUrl, setModelUrl] = useState();
+  const [isChatOpen, setIsChatOpen]   = useState(false);
+  const [modelData, setModelData]     = useState(null);
+  const [modelUrl, setModelUrl]       = useState();
   const [loadingModel, setLoadingModel] = useState(true);
 
-  const wheelOptions = modelData?.parts?.wheels || [];
-  const spoilerOptions = modelData?.parts?.spoilers || [];
   const colors = modelData?.colors || [];
 
-  // Helper to package the entire customization into a single object
-  const captureDesignState = () => {
-    return {
-      carId: modelData?._id || carId,
-      paint: {
-        color: selectedColor,
-        finish: "glossy" // Default for now
-      },
-      modularParts: currentBuild,
-      wheels: wheels
-    };
+  const handlePartSelect = (category, url, slot) => {
+    const key = slot || category;
+    setCurrentBuild(prev => ({ ...prev, [key]: url }));
+    if (category.toLowerCase() === "spoiler") setSelectedSpoiler(url);
   };
 
-  // Function to send the current state to the backend
+  const captureDesignState = () => ({
+    carId: modelData?._id || carId,
+    paint: { color: selectedColor, finish: "glossy" },
+    modularParts: currentBuild,
+    wheels,
+  });
+
   const saveDraft = async () => {
     try {
       setSaveStatus("saving");
       const currentState = captureDesignState();
-      
-      // Capture thumbnail from 3D viewer
-      const thumbnail = viewerRef.current?.takeScreenshot();
-      
+      const thumbnail    = viewerRef.current?.takeScreenshot();
       let response;
       if (designId) {
-        // Update existing draft
-        response = await apiClient.put(`/designs/${designId}`, { 
-          state: currentState,
-          thumbnail: thumbnail 
-        });
+        response = await apiClient.put(`/designs/${designId}`, { state: currentState, thumbnail });
       } else {
-        // Create new draft
-        response = await apiClient.post("/designs", { 
-          name: `My ${modelData?.name || "Car"}`, 
-          state: currentState,
-          thumbnail: thumbnail
+        response = await apiClient.post("/designs", {
+          name: `My ${modelData?.name || "Car"}`, state: currentState, thumbnail,
         });
-        setDesignId(response.data._id); 
+        setDesignId(response.data._id);
       }
-      
       setSaveStatus("saved");
-      console.log("[Auto-Save] Draft saved successfully:", response.data._id);
+      console.log("[Auto-Save] Draft saved:", response.data._id);
     } catch (error) {
       setSaveStatus("error");
-      console.error("[Auto-Save] Failed to save draft:", error);
-      // If it's a 401, user is likely logged out - we could redirect or just stop saving
+      console.error("[Auto-Save] Failed:", error);
     }
   };
 
-  // ── Auto-Save Engine ──────────────────────────────────────────────────────
   useEffect(() => {
-    // Only auto-save if we have model data (initial load complete)
     if (!modelData) return;
-
-    // Debounce: Wait 2 seconds of inactivity before saving
-    const timer = setTimeout(() => {
-      saveDraft();
-    }, 2000);
-
-    return () => clearTimeout(timer); // Reset timer if state changes again
+    const timer = setTimeout(() => saveDraft(), 2000);
+    return () => clearTimeout(timer);
   }, [selectedColor, currentBuild, wheels, modelData]);
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoadingModel(true);
-        
-        // 1. Fetch Chassis
         const modelEndpoint = carId ? `/models/${carId}` : "/models";
         const modelRes = await apiClient.get(modelEndpoint);
-        const model = Array.isArray(modelRes.data) ? modelRes.data[0] : modelRes.data;
+        const model    = Array.isArray(modelRes.data) ? modelRes.data[0] : modelRes.data;
 
         if (model) {
           setModelData(model);
           setModelUrl(model.chassisUrl || model.modelUrl);
 
-          // ── Resume/Hydration Logic ──
           if (designId) {
-            console.log("[Resume] Loading saved design:", designId);
             try {
-              const designRes = await apiClient.get(`/designs/${designId}`);
+              const designRes  = await apiClient.get(`/designs/${designId}`);
               const savedDesign = designRes.data;
-              
-              if (savedDesign && savedDesign.state) {
-                const { paint, wheels: savedWheels, modularParts } = savedDesign.state;
-                
-                // Apply saved state to editor
-                if (paint?.color) setSelectedColor(paint.color);
-                if (savedWheels) setWheels(savedWheels);
-                if (modularParts) setCurrentBuild(modularParts);
-                
-                console.log("[Resume] State hydrated successfully");
+              if (savedDesign?.state) {
+                const { paint, wheels: sw, modularParts } = savedDesign.state;
+                if (paint?.color)  setSelectedColor(paint.color);
+                if (sw)            setWheels(sw);
+                if (modularParts)  setCurrentBuild(modularParts);
               }
-            } catch (err) {
-              console.error("[Resume] Failed to load design:", err);
-            }
+            } catch { /* silent */ }
           }
 
-          // 2. Fetch Compatible Parts
           const partsRes = await apiClient.get(`/parts?carId=${model._id}`);
-          const parts = partsRes.data;
-
-          // Group parts by category for the OptionsPanel
-          const grouped = {};
-          const dynamicCategories = [{ id: "body", name: "BODY PAINT", icon: "●" }];
+          const parts    = partsRes.data;
+          const grouped  = {};
+          const dbCategories = [];
 
           parts.forEach(part => {
-            const catId = part.category.toLowerCase(); 
+            const catId = part.category.toLowerCase();
             const displayName = part.category.charAt(0).toUpperCase() + part.category.slice(1).toLowerCase();
-
             if (!grouped[catId]) {
               grouped[catId] = [];
-              dynamicCategories.push({
-                id: catId,
-                name: displayName.toUpperCase(),
-                icon: "▣"
-              });
+              dbCategories.push({ id: catId, name: displayName.toUpperCase(), icon: "▣" });
             }
             grouped[catId].push(part);
           });
 
           setAvailableParts(grouped);
-          setCategories(dynamicCategories);
+          setCategories([
+            STATIC_CATEGORIES[0],
+            ...dbCategories,
+            ...STATIC_CATEGORIES.slice(1),
+          ]);
         }
       } catch (error) {
         console.error("Data fetch error:", error);
@@ -185,195 +155,191 @@ export default function CustomizePage() {
         setLoadingModel(false);
       }
     }
-
     fetchData();
   }, [carId]);
 
-  return (
-    <Box
-      sx={{
-        position: "relative",
-        height: "100vh",
-        width: "100%",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        backgroundImage: "url('/images/garage3.jpeg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center 20%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
-      {/* Overlay */}
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.65)",
-          zIndex: 0,
-        }}
-      />
+  const saveStatusColor = saveStatus === "saving" ? T.ca : saveStatus === "error" ? T.cs : T.cp;
+  const saveStatusLabel = saveStatus === "saving" ? "SAVING…" : saveStatus === "error" ? "ERROR" : "SAVED";
 
-      {/* Content */}
-      <Box
-        sx={{
-          position: "relative",
-          zIndex: 1,
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          height: "100%",
-        }}
-      >
-        {/* Main Container - Full height flex column */}
-        <Box
-          sx={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            px: 3,
-            py: 1,
-          }}
-        >
-          {/* Header - Fixed at top */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 1.5,
-              flexShrink: 0,
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Box>
-                <Typography variant="h5" sx={{ color: "#fff", fontWeight: 600, fontSize: "1.5rem" }}>
-                  Design Studio
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#ccc", fontSize: "0.75rem" }}>
-                  Configure your vehicle
-                </Typography>
-              </Box>
-              
-              {/* Save Status Indicator */}
-              <Box sx={{ 
-                ml: 2, 
-                px: 1.5, 
-                py: 0.5, 
-                borderRadius: "20px", 
-                backgroundColor: "rgba(0,0,0,0.3)",
-                display: "flex",
-                alignItems: "center",
-                gap: 1
+  /* Active category object (used to filter PartSelector to one item) */
+  const activeCategory = categories.find(c => c.id === selectedPart) || categories[0];
+
+  return (
+    <Box sx={{ position: "fixed", inset: 0, overflow: "hidden", background: "#050811" }}>
+
+      {/* Subtle grid overlay */}
+      <Box sx={{
+        position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
+        backgroundImage: `
+          linear-gradient(rgba(0,255,204,.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,255,204,.02) 1px, transparent 1px)
+        `,
+        backgroundSize: "60px 60px",
+      }} />
+
+      {/* ── 3D Viewer — fills the entire viewport ─────────── */}
+      <Box sx={{ position: "absolute", inset: 0, zIndex: 1 }}>
+        <ThreeViewer
+          ref={viewerRef}
+          modelPath={modelUrl}
+          backgroundColor="transparent"
+          modelColor={selectedPart === "body" ? selectedColor : null}
+          wheelReplacements={wheels}
+          spoilerReplacement={selectedSpoiler}
+          currentBuild={currentBuild}
+          onWheelClick={(posId) => { setActiveWheelPosition(posId); setSelectedPart("wheels"); }}
+          sx={{ height: "100%", width: "100%" }}
+        />
+      </Box>
+
+      {/* ── Fixed bottom control bar ───────────────────────── */}
+      <Box sx={{
+        position: "fixed",
+        bottom: 0, left: 0, right: 0,
+        zIndex: 10,
+        background: "rgba(5,8,17,0.90)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        borderTop: `1px solid ${T.gbr}`,
+      }}>
+
+        {/* Row 1 — model info + save status + action buttons */}
+        <Box sx={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          px: 3, py: 1,
+          borderBottom: `1px solid rgba(0,255,204,0.08)`,
+        }}>
+
+          {/* Left: studio label + save indicator */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box>
+              <Typography sx={{
+                fontFamily: "var(--font-display)",
+                fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.15em",
+                color: T.cp, textTransform: "uppercase",
               }}>
-                <Box sx={{ 
-                  width: 8, 
-                  height: 8, 
-                  borderRadius: "50%", 
-                  backgroundColor: saveStatus === "saving" ? "#ffca28" : saveStatus === "error" ? "#f44336" : "#4caf50" 
-                }} />
-                <Typography variant="caption" sx={{ color: "#fff", fontSize: "0.65rem", fontWeight: 500 }}>
-                  {saveStatus === "saving" ? "Saving..." : saveStatus === "error" ? "Save Error" : "Draft Saved"}
-                </Typography>
-              </Box>
+                // DESIGN STUDIO
+              </Typography>
+              <Typography sx={{ fontFamily: "var(--font-body)", fontSize: "0.72rem",
+                color: "rgba(232,234,246,.45)", mt: 0.2 }}>
+                {modelData?.name || "Honda City"} &middot; Configure your vehicle
+              </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                onClick={() => saveDraft()}
-                variant="outlined"
-                size="small"
-                disabled={saveStatus === "saving"}
-                sx={{
-                  borderColor: "rgba(255,255,255,0.3)",
-                  color: "#fff",
-                  textTransform: "none",
-                  "&:hover": { borderColor: "#fff", background: "rgba(255,255,255,0.1)" },
-                  py: 0.5,
-                  px: 2,
-                }}
-              >
-                {saveStatus === "saving" ? "Saving..." : "Save Configuration"}
-              </Button>
-
-              <Button
-                onClick={() => setIsChatOpen(true)}
-                variant="contained"
-                size="small"
-                sx={{
-                  background: "linear-gradient(135deg, #0f2027, #2c5364)",
-                  textTransform: "none",
-                  "&:hover": { opacity: 0.9 },
-                  py: 0.5,
-                  px: 2,
-                }}
-              >
-                AI Assistant
-              </Button>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1,
+              px: 1.5, py: 0.5, background: "rgba(0,0,0,.3)", border: `1px solid ${T.gbr}` }}>
+              <Box sx={{ width: 7, height: 7, borderRadius: "50%",
+                background: saveStatusColor, boxShadow: `0 0 6px ${saveStatusColor}` }} />
+              <Typography sx={{ fontFamily: "var(--font-display)", fontSize: "0.56rem",
+                fontWeight: 700, letterSpacing: "0.12em", color: saveStatusColor }}>
+                {saveStatusLabel}
+              </Typography>
             </Box>
           </Box>
 
-          {/* Main Row - Takes remaining space */}
-          <Box
-            sx={{
-              display: "flex",
-              flex: 1,
-              gap: 2,
-              overflow: "hidden",
-              minHeight: 0,
-            }}
-          >
-            {/* 3D Viewer */}
-            <Box sx={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden" }}>
-              <ThreeViewer
-                ref={viewerRef}
-                modelPath={modelUrl}
-                backgroundColor="transparent"
-                modelColor={selectedPart === "body" ? selectedColor : null}
-                wheelReplacements={wheels}
-                spoilerReplacement={selectedSpoiler}
-                currentBuild={currentBuild} // PASS THE FULL BUILD
-                onWheelClick={(posId) => {
-                  setActiveWheelPosition(posId);
-                  setSelectedPart("wheels");
-                }}
-                sx={{ height: "100%", width: "100%" }}
-              />
+          {/* Right: action buttons */}
+          <Box sx={{ display: "flex", gap: 1.5 }}>
+            <Box
+              onClick={saveDraft}
+              sx={{
+                fontFamily: "var(--font-display)", fontSize: "0.6rem", fontWeight: 700,
+                letterSpacing: "0.12em", color: T.cp, background: "transparent",
+                border: `1px solid ${T.gbr}`, px: 2, py: 0.8,
+                textTransform: "uppercase", cursor: "pointer", transition: "all .3s",
+                "&:hover": { background: "rgba(0,255,204,.1)", borderColor: T.cp },
+              }}
+            >
+              {saveStatus === "saving" ? "Saving…" : "Save Config"}
             </Box>
 
-            {/* Unified Accordion Selector - Extreme Right */}
-            <Box sx={{ width: 320, flexShrink: 0, overflow: "auto" }}>
-              <PartSelector
-                parts={categories}
-                selectedPart={selectedPart}
-                onSelect={setSelectedPart}
-                availableParts={availableParts}
-                currentBuild={currentBuild}
-                onPartSelect={handlePartSelect}
-                
-                // Body/Color Props
-                selectedColor={selectedColor}
-                setSelectedColor={setSelectedColor}
-                colorPalette={colors.map(c => c.value)}
-
-                // Wheel Props
-                activeWheelPosition={activeWheelPosition}
-                wheels={wheels}
-                setWheels={setWheels}
-                onApplyAllWheels={(url) => {
-                  setWheels({
-                    "front-left": url, "front-right": url, "rear-left": url, "rear-right": url,
-                  });
-                }}
-              />
+            <Box
+              onClick={() => setIsChatOpen(true)}
+              sx={{
+                fontFamily: "var(--font-display)", fontSize: "0.6rem", fontWeight: 700,
+                letterSpacing: "0.12em", color: T.bg,
+                background: `linear-gradient(135deg, ${T.cp}, #0088ff)`,
+                px: 2, py: 0.8, textTransform: "uppercase", cursor: "pointer",
+                clipPath: "polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%)",
+                "&:hover": { opacity: 0.88 },
+              }}
+            >
+              AI ASSISTANT
             </Box>
           </Box>
         </Box>
+
+        {/* Row 2 — horizontal category tabs */}
+        <Box sx={{
+          display: "flex",
+          overflowX: "auto",
+          borderBottom: `1px solid rgba(0,255,204,0.08)`,
+          scrollbarWidth: "none",
+          "&::-webkit-scrollbar": { display: "none" },
+        }}>
+          {categories.map((cat) => {
+            const active = selectedPart === cat.id;
+            return (
+              <Box
+                key={cat.id}
+                onClick={() => setSelectedPart(cat.id)}
+                sx={{
+                  display: "flex", alignItems: "center", gap: 1,
+                  px: 2.5, py: 1.1, flexShrink: 0, cursor: "pointer",
+                  borderRight: `1px solid rgba(0,255,204,0.07)`,
+                  borderBottom: active ? `2px solid ${T.cp}` : "2px solid transparent",
+                  background: active ? "rgba(0,255,204,0.07)" : "transparent",
+                  transition: "background .2s, border-color .2s",
+                  "&:hover": { background: "rgba(0,255,204,0.05)" },
+                }}
+              >
+                <Typography sx={{ fontSize: "0.85rem",
+                  color: active ? T.cp : "rgba(232,234,246,.45)" }}>
+                  {cat.icon}
+                </Typography>
+                <Typography sx={{
+                  fontFamily: "var(--font-display)", fontSize: "0.6rem", fontWeight: 700,
+                  letterSpacing: "0.12em", whiteSpace: "nowrap", textTransform: "uppercase",
+                  color: active ? T.cp : "rgba(232,234,246,.5)",
+                }}>
+                  {cat.name}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+
+        {/* Row 3 — active category content panel */}
+        <Box sx={{
+          height: 120,
+          overflow: "hidden",
+          /* Neutralise PartSelector's own container chrome */
+          "& > div > div:first-of-type": { display: "none" },
+          "& .MuiAccordionSummary-root": { display: "none" },
+          "& .MuiAccordionDetails-root": { p: 0, height: "100%" },
+          "& .MuiAccordion-root": { background: "transparent !important", boxShadow: "none", height: "100%" },
+          "& > div": { height: "100%" },
+        }}>
+          <PartSelector
+            parts={activeCategory ? [activeCategory] : []}
+            selectedPart={selectedPart}
+            onSelect={setSelectedPart}
+            availableParts={availableParts}
+            currentBuild={currentBuild}
+            onPartSelect={handlePartSelect}
+            selectedColor={selectedColor}
+            setSelectedColor={setSelectedColor}
+            colorPalette={colors.map(c => c.value)}
+            activeWheelPosition={activeWheelPosition}
+            wheels={wheels}
+            setWheels={setWheels}
+            onApplyAllWheels={(url) => setWheels({
+              "front-left": url, "front-right": url, "rear-left": url, "rear-right": url,
+            })}
+          />
+        </Box>
+
       </Box>
 
-      {/* AI Chatbox */}
       <AiChatbox isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </Box>
   );
