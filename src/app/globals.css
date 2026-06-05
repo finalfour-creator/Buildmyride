@@ -3,3 +3,65 @@ body {
   padding: 0;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* === Studio (landing) scoped styles === */
+body.studio-active {
+  overflow: hidden;
+  height: 100vh;
+  background: #080808;
+  color: #f0ede8;
+  cursor: default;
+}
+
+body.studio-active * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Continuous keyframes used across the studio overlays */
+@keyframes arrPulse {
+  0%, 100% { opacity: 0.25; transform: scaleY(1); }
+  50%      { opacity: 1;    transform: scaleY(1.25); }
+}
+
+@keyframes hArrPulse {
+  0%, 100% { opacity: 0.25; transform: scaleX(1); }
+  50%      { opacity: 1;    transform: scaleX(1.25); }
+}
+
+@keyframes ar-scan {
+  0%   { transform: translateY(0%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(420%); opacity: 0; }
+}
+
+@keyframes carWire {
+  0%, 100% { opacity: 0.4; filter: drop-shadow(0 0 6px rgba(200,169,110,0.5)); }
+  50%      { opacity: 0.9; filter: drop-shadow(0 0 14px rgba(200,169,110,0.85)); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+@keyframes phoneFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+@keyframes tickerScroll {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+/* SVG grain overlay (consumed by StudioRoot grain layer) */
+.studio-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/></svg>");
+}
