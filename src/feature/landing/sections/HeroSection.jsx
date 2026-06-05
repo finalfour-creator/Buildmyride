@@ -37,32 +37,34 @@ export default function HeroSection() {
       </Box>
 
       <Box>
+        {["Build", "Your"].map((word, i) => (
+          <Box
+            key={word}
+            sx={{
+              fontFamily: TOKENS.fonts.display,
+              fontWeight: 900,
+              fontSize: { xs: "12vw", md: "7vw" },
+              lineHeight: 0.92,
+              letterSpacing: "-0.04em",
+              color: TOKENS.colors.white,
+              textTransform: "uppercase",
+            }}
+          >
+            <KineticText text={word} baseDelay={0.1 + i * 0.25} />
+          </Box>
+        ))}
         <Box
           sx={{
             fontFamily: TOKENS.fonts.display,
             fontWeight: 900,
-            fontSize: { xs: "14vw", md: "11vw" },
-            lineHeight: 0.9,
+            fontSize: { xs: "12vw", md: "7vw" },
+            lineHeight: 0.92,
             letterSpacing: "-0.04em",
             color: TOKENS.colors.white,
             textTransform: "uppercase",
           }}
         >
-          <KineticText text="Build Your" baseDelay={0.1} />
-        </Box>
-        <Box
-          sx={{
-            fontFamily: TOKENS.fonts.display,
-            fontWeight: 900,
-            fontSize: { xs: "14vw", md: "11vw" },
-            lineHeight: 0.9,
-            letterSpacing: "-0.04em",
-            color: TOKENS.colors.white,
-            textTransform: "uppercase",
-            mt: 1,
-          }}
-        >
-          <KineticText text="Dream Car." baseDelay={0.55} stroked />
+          <KineticText text="Car" baseDelay={0.6} stroked />
         </Box>
       </Box>
 

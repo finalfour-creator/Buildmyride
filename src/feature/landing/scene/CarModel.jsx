@@ -41,13 +41,41 @@ export default function CarModel() {
         o.castShadow = true;
         o.receiveShadow = true;
         if (o.material) {
-          // Clone material so we don't mutate the cached scene's shared material
           o.material = o.material.clone();
         }
       }
     });
     return c;
   }, [scene]);
+
+  const wheelMeshes = useMemo(() => {
+    const wheels = [];
+    cloned.traverse((o) => {
+      if (o.isMesh && looksLikeWheel(o.name)) {
+        const geom = o.geometry;
+        geom.computeBoundingBox();
+        const center = new THREE.Vector3();
+        geom.boundingBox.getCenter(center);
+        if (center.lengthSq() > 0.001) {
+          geom.translate(-center.x, -center.y, -center.z);
+          o.position.add(center);
+        }
+        wheels.push(o);
+      }
+    });
+    return wheels;
+  }, [cloned]);
+
+  const { scaleFactor, offset } = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(cloned);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const s = 4.0 / Math.max(size.x, size.y, size.z);
+    return {
+      scaleFactor: s,
+      offset: [-center.x * s, -box.min.y * s - 1.05, -center.z * s],
+    };
+  }, [cloned]);
 
   // Apply chassis tint on chassis selection
   useEffect(() => {
@@ -78,16 +106,14 @@ export default function CarModel() {
 
     // Wheel spin
     wheelRotRef.current += 0.009 * 60 * dt;
-    cloned.traverse((o) => {
-      if (looksLikeWheel(o.name)) {
-        o.rotation.x = wheelRotRef.current;
-      }
-    });
+    for (const w of wheelMeshes) {
+      w.rotation.x = wheelRotRef.current;
+    }
   });
 
   return (
-    <group ref={group} position={[0, 0, 0]} scale={1.1}>
-      <primitive object={cloned} />
+    <group ref={group}>
+      <primitive object={cloned} scale={scaleFactor} position={offset} />
     </group>
   );
 }

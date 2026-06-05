@@ -18,7 +18,7 @@ export default function KineticText({
         perspective: 600,
         ...(stroked
           ? {
-              WebkitTextStroke: "1px currentColor",
+              WebkitTextStroke: "2px currentColor",
               color: "transparent",
             }
           : {}),

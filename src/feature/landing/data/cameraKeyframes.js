@@ -1,5 +1,5 @@
 export const CAM = {
-  hero:       { pos: [6, 2.5, 7],     look: [0, 0.3, 0],  fov: 40 },
+  hero:       { pos: [1.2, 1.0, 5.0], look: [0, 0.3, 0],  fov: 34 },
   manifesto1: { pos: [5, 1.6, 8],     look: [0, 0.4, 0],  fov: 42 },
   manifesto2: { pos: [-5, 1.6, 8],    look: [0, 0.4, 0],  fov: 42 },
   chassis:    { pos: [4.5, 1.8, 6.5], look: [0, 0.4, 0],  fov: 38 },
@@ -14,7 +14,7 @@ export const CAM = {
 };
 
 export const CAR_YAWS = {
-  hero: 0,
+  hero: 0.15,
   manifesto1: 0.25,
   manifesto2: -0.25,
   chassis: 0.45,
