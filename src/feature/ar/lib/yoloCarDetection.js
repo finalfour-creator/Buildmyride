@@ -2,7 +2,7 @@
  * YOLOv8 car detection in the browser via ONNX Runtime Web.
  * Model: place yolov8n.onnx in public/models/ (see public/models/README.md)
  */
-import { getOrt } from "./onnxSetup";
+import { getOrt, tryAcquireOnnxLock, releaseOnnxLock, INFERENCE_SKIPPED } from "./onnxSetup";
 
 export const YOLO_MODEL_URL = "/models/yolov8n.onnx";
 export const YOLO_INPUT_SIZE = 640;
@@ -34,7 +34,7 @@ async function getSession() {
     sessionPromise = (async () => {
       const ort = await getOrt(); // shared init — no duplicate initWasm()
       return ort.InferenceSession.create(YOLO_MODEL_URL, {
-        executionProviders: ["webgpu", "webgl", "wasm"],
+        executionProviders: ["webgl", "wasm"],
         graphOptimizationLevel: "all",
         enableMemPattern: true,
       });
@@ -159,16 +159,21 @@ export async function detectCarInVideoFrame(video) {
 
   const hasModel = await checkYoloModelAvailable();
   if (!hasModel) return null;
+  if (!tryAcquireOnnxLock()) return INFERENCE_SKIPPED;
 
-  const [session, ort] = await Promise.all([getSession(), getOrt()]);
-  const inputData = preprocessVideoFrame(video);
-  const inputTensor = new ort.Tensor("float32", inputData, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]);
+  try {
+    const [session, ort] = await Promise.all([getSession(), getOrt()]);
+    const inputData = preprocessVideoFrame(video);
+    const inputTensor = new ort.Tensor("float32", inputData, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]);
 
-  const inputName = session.inputNames[0];
-  const outputs = await session.run({ [inputName]: inputTensor });
-  const outputTensor = outputs[session.outputNames[0]];
+    const inputName = session.inputNames[0];
+    const outputs = await session.run({ [inputName]: inputTensor });
+    const outputTensor = outputs[session.outputNames[0]];
 
-  return parseYoloOutput(outputTensor, video.videoWidth, video.videoHeight);
+    return parseYoloOutput(outputTensor, video.videoWidth, video.videoHeight);
+  } finally {
+    releaseOnnxLock();
+  }
 }
 
 export function resetYoloSession() {

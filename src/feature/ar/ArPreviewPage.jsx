@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -15,11 +15,16 @@ import ArSelectionSummary from "./components/ArSelectionSummary";
 import useYoloDetection from "./hooks/useYoloDetection";
 import useYoloSegmentation from "./hooks/useYoloSegmentation";
 import useYoloCarParts from "./hooks/useYoloCarParts";
+import useViewAlignment from "./hooks/useViewAlignment";
 import ArDetectionOverlay from "./components/ArDetectionOverlay";
 import ArDetectionStatus from "./components/ArDetectionStatus";
 import ArSegmentationOverlay from "./components/ArSegmentationOverlay";
 import ArPartsOverlay from "./components/ArPartsOverlay";
 import ArThreeOverlay from "./components/ArThreeOverlay";
+import ArTemplateOverlay from "./components/ArTemplateOverlay";
+import ArViewSelector from "./components/ArViewSelector";
+import ArAnchoredModels from "./components/ArAnchoredModels";
+import { ANCHOR_CONFIG } from "./lib/arTemplateConfig";
 
 const INITIAL_WHEELS = {
   "front-left": null,
@@ -43,26 +48,55 @@ export default function ArPreviewPage() {
   const cameraContainerRef = useRef(null);
   const arOverlayRef = useRef(null);
 
+  const [mode,           setMode]           = useState("car"); // "car"|"parts"|"template"
+  const [selectedPart,   setSelectedPart]   = useState(null);
+  const [selectedColor,  setSelectedColor]  = useState(null);
+  const [arBuild,        setArBuild]        = useState({});
+  const [wheels,         setWheels]         = useState(INITIAL_WHEELS);
+  const [activeWheelPosition]               = useState(null);
+  // Template mode state
+  const [selectedView,   setSelectedView]   = useState(null);       // "front"|"left"|"right"|"rear"
+  const [enabledAnchors, setEnabledAnchors] = useState(new Set());  // anchor keys to render
+
+  // Automatically enable all assets for the selected view by default
+  useEffect(() => {
+    if (selectedView) {
+      const anchors = ANCHOR_CONFIG[selectedView] ?? {};
+      setEnabledAnchors(new Set(Object.keys(anchors)));
+    } else {
+      setEnabledAnchors(new Set());
+    }
+  }, [selectedView]);
+
+  const isTemplateMode = mode === "template";
+  const isCarMode      = mode === "car";
+  const isPartsMode    = mode === "parts";
+
+  // Segmentation runs in both "car" and "template" modes
+  const { carMask, segMode, segFps } =
+    useYoloSegmentation(videoRef, isActive && (isCarMode || isTemplateMode));
+
+  // Detection runs in "car" mode; also feeds alignment in "template" mode
   const {
     bbox,
     detectionMode,
     fps,
     statusMessage,
     isInferring,
-  } = useYoloDetection(videoRef, isActive);
-
-  const { carMask, segMode, segFps } =
-    useYoloSegmentation(videoRef, isActive);
+  } = useYoloDetection(videoRef, isActive && (isCarMode || isTemplateMode));
 
   const { parts, partsMode, partsFps } =
-    useYoloCarParts(videoRef, isActive);
+    useYoloCarParts(videoRef, isActive && (isPartsMode || isTemplateMode || isCarMode));
 
-  const [mode, setMode] = useState("car"); // "car" | "parts"
-  const [selectedPart, setSelectedPart] = useState(null);
-  const [selectedColor, setSelectedColor] = useState(null); // null = green detection mode
-  const [arBuild, setArBuild] = useState({});
-  const [wheels, setWheels] = useState(INITIAL_WHEELS);
-  const [activeWheelPosition] = useState(null);
+
+  // Template alignment — uses seg mask + bbox to measure car-to-template fill
+  const { alignScore, isLocked, overlayBox, unlock } = useViewAlignment(
+    isTemplateMode ? carMask : null,
+    isTemplateMode ? bbox    : null,
+    videoRef,
+    cameraContainerRef,
+    selectedView,
+  );
 
   const handlePartSelect = useCallback((categoryId, url, slot, meta) => {
     const key = slot || categoryId;
@@ -323,13 +357,14 @@ export default function ArPreviewPage() {
               bbox={bbox}
               arBuild={arBuild}
               wheels={wheels}
+              parts={parts}
               paintColor={selectedColor}
               applyPaint
             />
           )}
 
-          {/* Pixel-level segmentation mask — rendered below the bbox overlay */}
-          {isActive && (
+          {/* Pixel-level segmentation mask — only in Whole Car mode */}
+          {isActive && mode === "car" && (
             <ArSegmentationOverlay
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -339,7 +374,7 @@ export default function ArPreviewPage() {
           )}
 
           {/* Segmentation status badge — top-right, only when model is active */}
-          {isActive && segMode === "seg" && (
+          {isActive && mode === "car" && segMode === "seg" && (
             <Box
               sx={{
                 position: "absolute",
@@ -387,8 +422,8 @@ export default function ArPreviewPage() {
             </Box>
           )}
 
-          {/* Car-parts detection overlay — coloured boxes per detected part */}
-          {isActive && partsMode === "parts" && (
+          {/* Car-parts detection overlay — only in Car Parts mode */}
+          {isActive && mode === "parts" && partsMode === "parts" && (
             <ArPartsOverlay
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -398,7 +433,7 @@ export default function ArPreviewPage() {
           )}
 
           {/* Parts status badge */}
-          {isActive && partsMode === "parts" && (
+          {isActive && mode === "parts" && partsMode === "parts" && (
             <Box
               sx={{
                 position: "absolute",
@@ -440,8 +475,8 @@ export default function ArPreviewPage() {
             </Box>
           )}
 
-          {/* Show bounding box only when there is no seg mask (box = fallback) */}
-          {isActive && !carMask && (
+          {/* Detection bbox fallback — only when no seg mask and not in template mode */}
+          {isActive && isCarMode && !carMask && (
             <ArDetectionOverlay
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -450,7 +485,7 @@ export default function ArPreviewPage() {
             />
           )}
 
-          {isActive && (
+          {isActive && isCarMode && (
             <ArDetectionStatus
               detectionMode={detectionMode}
               fps={fps}
@@ -459,11 +494,38 @@ export default function ArPreviewPage() {
             />
           )}
 
-          {isActive && (
+          {isActive && isCarMode && (
             <ArSelectionSummary
               arBuild={arBuild}
               wheels={wheels}
               selectedColor={selectedColor}
+            />
+          )}
+
+          {/* ── Template AR mode overlays ─────────────────────────────────── */}
+          {isActive && isTemplateMode && (
+            <ArViewSelector
+              selectedView={selectedView}
+              onSelectView={(view) => {
+                if (view === selectedView) unlock();
+                setSelectedView(view);
+              }}
+              isLocked={isLocked}
+            />
+          )}
+
+          {/* Outlines completely removed. Snapping directly to detected car parts. */}
+
+          {isActive && isTemplateMode && (
+            <ArAnchoredModels
+              containerRef={cameraContainerRef}
+              videoRef={videoRef}
+              selectedView={selectedView}
+              isLocked={isLocked}
+              enabledAnchors={enabledAnchors}
+              paintColor={selectedColor}
+              overlayBox={overlayBox}
+              parts={parts}
             />
           )}
         </Box>
@@ -475,6 +537,10 @@ export default function ArPreviewPage() {
           setSelectedColor={setSelectedColor}
           selectedPart={selectedPart}
           setSelectedPart={setSelectedPart}
+          selectedView={selectedView}
+          enabledAnchors={enabledAnchors}
+          setEnabledAnchors={setEnabledAnchors}
+          isLocked={isLocked}
         />
       </Box>
     </Box>

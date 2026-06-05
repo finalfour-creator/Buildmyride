@@ -4,6 +4,7 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import * as THREE from "three";
 import { Box } from "@mui/material";
 import { mapVideoBBoxToDisplay } from "../lib/arCoordinates";
+import { createDecalPlane, textureLoader, bboxCentroid } from "../lib/arDecalUtils";
 import {
   loadGltf,
   applyPaintColor,
@@ -12,6 +13,7 @@ import {
 } from "../lib/loadArGltf";
 
 const WHEEL_SLOTS = {
+
   "front-left": { x: -0.38, y: -0.22, z: 0.18 },
   "front-right": { x: 0.38, y: -0.22, z: 0.18 },
   "rear-left": { x: -0.38, y: -0.22, z: -0.18 },
@@ -52,6 +54,7 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
     bbox,
     arBuild = {},
     wheels = {},
+    parts = null,
     paintColor,
     applyPaint = false,
   },
@@ -63,6 +66,45 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
   const rendererRef = useRef(null);
   const carAnchorRef = useRef(null);
   const loadedPartsRef = useRef(new Map());
+  const decalCacheRef = useRef(new Map());
+
+  // Dev decal mapping: attach to detected parts (from car-parts seg model).
+  // Window stickers & racing stripes are placed in TEMPLATE mode (enabledAnchors), but we still use
+  // car-part masks to align them to the real vehicle.
+const DECAL_DEFS = [
+    {
+      key: "rear-window-sticker",
+      className: "Back Glass",
+      textureKey: "rear-window-sticker-1",
+      width: 0.55,
+      height: 0.25,
+      zOffset: 0.02,
+    },
+    {
+      key: "racing-strip-left",
+      className: "Back Left Door",
+      textureKey: "racing-stripL-1",
+      width: 0.45,
+      height: 0.08,
+      zOffset: 0.01,
+    },
+    {
+      key: "racing-strip-right",
+      className: "Back Right Door",
+      textureKey: "racing-stripeR-1",
+      width: 0.45,
+      height: 0.08,
+      zOffset: 0.01,
+    },
+  ];
+
+  const getTextureUrlByKey = (textureKey) => {
+    // textures live in public/images/decals/
+    return `/images/decals/${textureKey}.png`;
+  };
+
+
+
   const rafRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -191,10 +233,96 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
     const carAnchor = carAnchorRef.current;
     if (!carAnchor || !bbox) return;
 
+    // --- 1) Stickers/decals from per-part segmentation masks ---
+    if (parts && parts.length) {
+      // Create once: decal anchors are groups under carAnchor
+      // keyed by decal key (rear-window-sticker, racing-strip-left, ...)
+      for (const def of DECAL_DEFS) {
+        const det = parts
+          .filter((p) => p?.className === def.className)
+          .sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0))[0];
+
+        if (!det) continue;
+
+        const slotKey = def.key;
+        let decalAnchor = loadedPartsRef.current.get(`decal:${slotKey}`);
+        if (!decalAnchor) {
+          decalAnchor = new THREE.Group();
+          decalAnchor.userData = { kind: "decal", textureKey: def.textureKey };
+          loadedPartsRef.current.set(`decal:${slotKey}`, decalAnchor);
+          carAnchor.add(decalAnchor);
+        }
+
+        // Map detection bbox to display coordinates
+        const videoW = videoRef?.current?.videoWidth;
+        const videoH = videoRef?.current?.videoHeight;
+        const containerEl = mountRef.current;
+        if (videoW && videoH && containerEl) {
+          const cw = containerEl.clientWidth;
+          const ch = containerEl.clientHeight;
+          const rect = mapVideoBBoxToDisplay(
+            { x: det.x1, y: det.y1, width: det.x2 - det.x1, height: det.y2 - det.y1 },
+            videoW,
+            videoH,
+            cw,
+            ch
+          );
+
+          if (rect) {
+            const aspect = cw / ch;
+            const cx = (rect.left + rect.width / 2) / cw;
+            const cy = (rect.top + rect.height / 2) / ch;
+
+            decalAnchor.position.x = (cx - 0.5) * 2 * aspect;
+            decalAnchor.position.y = -(cy - 0.5) * 2;
+            decalAnchor.position.z = def.zOffset;
+
+            const s = (rect.width / cw) * 1.15;
+            decalAnchor.scale.set(s, s, s);
+          }
+        }
+
+        // Update plane texture and approximate mask-based alpha (Option B MVP).
+        // For now we create a per-dec'l alpha map by drawing the detection mask bbox onto a canvas.
+        const existingPlane = decalAnchor.getObjectByName("plane");
+
+        if (!existingPlane) {
+              const plane = createDecalPlane({
+            texture: textureLoader().load(getTextureUrlByKey(def.textureKey)),
+            width: def.width,
+            height: def.height,
+          });
+
+          // MVP: make decal clickable-ish look by enabling alpha, but clipping via mask is pending.
+          // (Mask-based alpha blending will be implemented next.)
+
+          plane.name = "plane";
+          decalAnchor.add(plane);
+        }
+      }
+
+      // Remove decals that no longer exist
+      for (const [k, obj] of loadedPartsRef.current.entries()) {
+        if (!k.startsWith("decal:")) continue;
+        const decalKey = k.replace("decal:", "");
+        const def = DECAL_DEFS.find((d) => d.key === decalKey);
+        const stillVisible = def
+          ? parts.some((p) => p?.className === def.className)
+          : false;
+        if (!stillVisible) {
+          carAnchor.remove(obj);
+          loadedPartsRef.current.delete(k);
+        }
+      }
+    }
+
+    // --- 2) 3D models from arBuild/wheels (still bbox-based for now) ---
+
     let cancelled = false;
 
     async function syncParts() {
       const wanted = new Map();
+
 
       for (const [slot, data] of Object.entries(arBuild)) {
         const url = typeof data === "string" ? data : data?.modelUrl;
@@ -259,7 +387,8 @@ const ArThreeOverlay = forwardRef(function ArThreeOverlay(
     return () => {
       cancelled = true;
     };
-  }, [arBuild, wheels, bbox, paintColor, applyPaint]);
+  }, [arBuild, wheels, bbox, paintColor, applyPaint, parts]);
+
 
   /** Re-tint all loaded meshes when body color changes */
   useEffect(() => {

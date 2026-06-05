@@ -4,17 +4,21 @@ import { useEffect, useRef } from "react";
 import { Box } from "@mui/material";
 
 /**
- * Canvas overlay that draws labelled bounding boxes for each detected car part.
- * Uses the same object-fit:cover coordinate mapping as ArDetectionOverlay.
- * Parts array and video dimensions are read from refs so the RAF loop never
- * restarts when detections update.
+ * Renders per-part pixel-accurate masks from the YOLOv8-seg parts model.
+ *
+ * Performance design:
+ *   - partsRef + selectedPartRef updated via separate tiny useEffects.
+ *   - Main RAF loop never restarts on new detections.
+ *   - Dirty-flag: the pixel compositing (expensive) only runs when parts data
+ *     or selected part actually changes — not on every 60fps frame.
+ *   - RAF loop otherwise just redraws the cached composited canvas image.
  */
 export default function ArPartsOverlay({ containerRef, videoRef, parts, selectedPart }) {
   const canvasRef       = useRef(null);
   const partsRef        = useRef(parts);
   const selectedPartRef = useRef(selectedPart);
 
-  useEffect(() => { partsRef.current = parts; }, [parts]);
+  useEffect(() => { partsRef.current = parts; },             [parts]);
   useEffect(() => { selectedPartRef.current = selectedPart; }, [selectedPart]);
 
   useEffect(() => {
@@ -23,16 +27,29 @@ export default function ArPartsOverlay({ containerRef, videoRef, parts, selected
     const video     = videoRef?.current;
     if (!canvas || !container || !video) return;
 
+    // object-fit:cover coordinate mapping
     const getGeometry = (vw, vh, cw, ch) => {
       const va = vw / vh, ca = cw / ch;
       let renderW, renderH, offX = 0, offY = 0;
-      if (va > ca) {
-        renderH = ch; renderW = ch * va; offX = (cw - renderW) / 2;
-      } else {
-        renderW = cw; renderH = cw / va; offY = (ch - renderH) / 2;
-      }
+      if (va > ca) { renderH = ch; renderW = ch * va; offX = (cw - renderW) / 2; }
+      else         { renderW = cw; renderH = cw / va; offY = (ch - renderH) / 2; }
       return { renderW, renderH, offX, offY };
     };
+
+    const hexToRgb = (hex) => {
+      const h = hex.replace("#", "");
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    };
+
+    const SELECTED_RGB = [37, 99, 235]; // #2563eb — blue for selected part
+
+    // Video-resolution compositing buffers (lazy-init, reused every frame)
+    let overlayCanvas = null, overlayCtx = null;
+    let pixelBuf = null, imgData = null;
+    let bufVw = 0, bufVh = 0;
+
+    // Dirty-flag: only recompose when parts or selectedPart actually changes
+    let lastParts = null, lastSelected = null;
 
     const drawFrame = () => {
       const cw = container.clientWidth;
@@ -40,84 +57,95 @@ export default function ArPartsOverlay({ containerRef, videoRef, parts, selected
       if (!cw || !ch) return;
 
       if (canvas.width !== cw || canvas.height !== ch) {
-        canvas.width  = cw;
-        canvas.height = ch;
+        canvas.width = cw; canvas.height = ch;
       }
-
       const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, cw, ch);
 
       const partsList = partsRef.current;
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-      if (!partsList?.length || !vw || !vh) return;
+      const selected  = selectedPartRef.current;
+      const vw = video.videoWidth, vh = video.videoHeight;
 
+      if (!partsList?.length || !vw || !vh) {
+        ctx.clearRect(0, 0, cw, ch);
+        return;
+      }
+
+      // Re-allocate video-res buffers when dimensions change
+      if (vw !== bufVw || vh !== bufVh) {
+        overlayCanvas = document.createElement("canvas");
+        overlayCanvas.width = vw; overlayCanvas.height = vh;
+        overlayCtx = overlayCanvas.getContext("2d");
+        pixelBuf   = new Uint8ClampedArray(vw * vh * 4);
+        imgData    = new ImageData(pixelBuf, vw, vh);
+        bufVw = vw; bufVh = vh;
+        lastParts = null; // force recompose after resize
+      }
+
+      // Only recompose when data changes — not every 60fps frame
+      if (partsList !== lastParts || selected !== lastSelected) {
+        lastParts   = partsList;
+        lastSelected = selected;
+        pixelBuf.fill(0);
+
+        const total  = vw * vh;
+        const filter = selected; // null = show all
+
+        for (const part of partsList) {
+          if (filter && part.className !== filter) continue;
+          if (!part.mask) continue;
+
+          const isSelected = Boolean(filter);
+          const col  = isSelected ? SELECTED_RGB : hexToRgb(part.color);
+          const maxA = isSelected ? 0.85 : 0.55; // selected parts more opaque
+
+          for (let i = 0; i < total; i++) {
+            const mOp = part.mask[i];
+            if (mOp === 0) continue;
+            const a = Math.round((mOp / 255) * maxA * 255);
+            if (a > pixelBuf[i * 4 + 3]) {
+              pixelBuf[i * 4]     = col[0];
+              pixelBuf[i * 4 + 1] = col[1];
+              pixelBuf[i * 4 + 2] = col[2];
+              pixelBuf[i * 4 + 3] = a;
+            }
+          }
+        }
+
+        overlayCtx.putImageData(imgData, 0, 0);
+      }
+
+      // Draw composited mask with object-fit:cover transform
+      ctx.clearRect(0, 0, cw, ch);
       const { renderW, renderH, offX, offY } = getGeometry(vw, vh, cw, ch);
-      const sx = renderW / vw;
-      const sy = renderH / vh;
+      ctx.drawImage(overlayCanvas, offX, offY, renderW, renderH);
 
-      const activeFilter = selectedPartRef.current; // null or part name string
-
+      // Label pills positioned at bbox corners (still useful for identification)
+      const sx = renderW / vw, sy = renderH / vh;
+      ctx.font = "bold 11px system-ui, sans-serif";
       for (const part of partsList) {
-        const x = offX + part.x1 * sx;
-        const y = offY + part.y1 * sy;
-        const w = (part.x2 - part.x1) * sx;
-        const h = (part.y2 - part.y1) * sy;
-        const col      = part.color;
-        const isActive = !activeFilter || part.className === activeFilter;
-        const alpha    = isActive ? 1 : 0.25; // dim unselected parts
-
-        ctx.globalAlpha = alpha;
-
-        // Fill — stronger when selected
-        ctx.fillStyle = col + (isActive && activeFilter ? "50" : "20");
-        ctx.fillRect(x, y, w, h);
-
-        // Border
-        ctx.strokeStyle = col;
-        ctx.lineWidth   = isActive && activeFilter ? 3 : 1.5;
-        ctx.strokeRect(x, y, w, h);
-
-        // Corner accents
-        const arm = Math.min(12, w * 0.2, h * 0.2);
-        ctx.lineWidth = isActive && activeFilter ? 4 : 2.5;
-        ctx.beginPath();
-        ctx.moveTo(x, y + arm); ctx.lineTo(x, y); ctx.lineTo(x + arm, y);
-        ctx.moveTo(x + w - arm, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + arm);
-        ctx.moveTo(x + w, y + h - arm); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - arm, y + h);
-        ctx.moveTo(x + arm, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - arm);
-        ctx.stroke();
-
-        // Label
-        const label    = `${part.className}  ${Math.round(part.score * 100)}%`;
-        const fontSize = 11;
-        ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+        if (selected && part.className !== selected) continue;
+        const isSelected = Boolean(selected);
+        const col = isSelected ? "#2563eb" : part.color;
+        const x   = offX + part.x1 * sx;
+        const y   = offY + part.y1 * sy;
+        const label = `${part.className}  ${Math.round(part.score * 100)}%`;
         const tw = ctx.measureText(label).width;
-        const ph = fontSize + 6;
-        const pw = tw + 10;
+        const ph = 17, pw = tw + 10;
         const lx = Math.max(0, Math.min(x, cw - pw));
         const ly = y > ph + 2 ? y - ph - 2 : y + 2;
-
         ctx.fillStyle = col;
         ctx.fillRect(lx, ly, pw, ph);
         ctx.fillStyle = "#fff";
-        ctx.fillText(label, lx + 5, ly + fontSize);
-
-        ctx.globalAlpha = 1;
+        ctx.fillText(label, lx + 5, ly + 12);
       }
     };
 
     let rafId;
     const loop = () => { drawFrame(); rafId = requestAnimationFrame(loop); };
     rafId = requestAnimationFrame(loop);
-
     const ro = new ResizeObserver(() => drawFrame());
     ro.observe(container);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      ro.disconnect();
-    };
+    return () => { cancelAnimationFrame(rafId); ro.disconnect(); };
   }, [containerRef, videoRef]);
 
   return (
@@ -130,7 +158,7 @@ export default function ArPartsOverlay({ containerRef, videoRef, parts, selected
         width: "100%",
         height: "100%",
         pointerEvents: "none",
-        zIndex: 4, // above seg overlay (1), detection overlay (2), Three.js (3)
+        zIndex: 4,
       }}
     />
   );

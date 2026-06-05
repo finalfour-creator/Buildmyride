@@ -6,6 +6,7 @@ import {
   checkYoloModelAvailable,
   detectCarInVideoFrame,
 } from "../lib/yoloCarDetection";
+import { INFERENCE_SKIPPED } from "../lib/onnxSetup";
 
 /** Consecutive frames without a car before clearing the box (YOLO mode) */
 const NO_CAR_CLEAR_FRAMES = 2;
@@ -79,6 +80,7 @@ export default function useYoloDetection(videoRef, isCameraActive) {
 
       if (detectionMode === "yolo") {
         raw = await detectCarInVideoFrame(video);
+        if (raw === INFERENCE_SKIPPED) return; // WASM busy — keep existing bbox
         if (!raw || raw.confidence < 0.35) {
           noCarFramesRef.current += 1;
         } else {

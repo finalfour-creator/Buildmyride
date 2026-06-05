@@ -5,6 +5,7 @@ import {
   checkSegModelAvailable,
   segmentCarInVideoFrame,
 } from "../lib/yoloCarSegmentation";
+import { INFERENCE_SKIPPED } from "../lib/onnxSetup";
 
 function isMobileDevice() {
   if (typeof navigator === "undefined") return false;
@@ -12,12 +13,14 @@ function isMobileDevice() {
 }
 
 // Frames to skip between inference calls (GPU execution makes this affordable)
-const FRAME_SKIP_DESKTOP = 2;
-const FRAME_SKIP_MOBILE  = 6;
+// skip=1: attempt inference every RAF frame; inferringRef prevents overlap.
+// Effective rate is capped by model speed (~3-5 fps), not by this counter.
+const FRAME_SKIP_DESKTOP = 1;
+const FRAME_SKIP_MOBILE  = 3;
 
-// Consecutive missed detections before clearing the mask.
-// 8 misses at skip=2 ≈ 0.5s at 30fps — survives angle changes without flicker.
-const CLEAR_AFTER_MISSES = 8;
+// 2 real misses = car genuinely not found for ~2 inference cycles (~0.6s).
+// Old ghost mask clears quickly when the car moves or leaves frame.
+const CLEAR_AFTER_MISSES = 2;
 
 /**
  * YOLOv8-seg segmentation hook — runs alongside useYoloDetection.
@@ -58,6 +61,7 @@ export default function useYoloSegmentation(videoRef, isCameraActive) {
     try {
       const result = await segmentCarInVideoFrame(video);
 
+      if (result === INFERENCE_SKIPPED) return; // WASM busy — don't count as miss
       if (result) {
         missedRef.current = 0;
         setCarMask(result.carMask);

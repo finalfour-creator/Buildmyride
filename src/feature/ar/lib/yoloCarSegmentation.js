@@ -11,7 +11,7 @@
  *   output1: [1, 32, 160, 160] — prototype masks
  */
 
-import { getOrt } from "./onnxSetup";
+import { getOrt, tryAcquireOnnxLock, releaseOnnxLock, INFERENCE_SKIPPED } from "./onnxSetup";
 
 export const SEG_MODEL_URL = "/models/yolov8n-seg.onnx";
 
@@ -44,7 +44,8 @@ let _fc = null, _fcCtx = null, _fcW = 0, _fcH = 0; // video-res crop
 let _prepFloat32 = null;  // Float32Array(3 × 640 × 640) for preprocessing
 let _maskRaw     = null;  // Float32Array(160 × 160) for prototype mask
 let _opacity     = null;  // Uint8ClampedArray(vw × vh) returned by upscaleMask
-let _composite   = null;  // Uint8ClampedArray(vw × vh) final output
+let _composite   = null;  // Uint8ClampedArray(vw × vh) working buffer (zeroed each frame)
+let _display     = null;  // Uint8ClampedArray(vw × vh) stable buffer read by overlay
 let _bufVw = 0, _bufVh = 0; // track video dims for buffer resize
 
 export async function checkSegModelAvailable() {
@@ -63,7 +64,7 @@ async function getSegSession() {
     segSessionPromise = (async () => {
       const ort = await getOrt(); // shared init — no duplicate initWasm()
       return ort.InferenceSession.create(SEG_MODEL_URL, {
-        executionProviders: ["webgpu", "webgl", "wasm"],
+        executionProviders: ["webgl", "wasm"],
         graphOptimizationLevel: "all",
         enableMemPattern: true,
       });
@@ -148,14 +149,17 @@ function upscaleMask(maskRaw, scale, padX, padY, vw, vh) {
     _mc.height = MASK_DIM;
     _mcCtx = _mc.getContext("2d");
   }
+  // Power pre-sharpen: push confident pixels toward 1 and uncertain toward 0,
+  // so bilinear upscaling places a steeper gradient exactly at the car boundary.
   const md = _mcCtx.createImageData(MASK_DIM, MASK_DIM);
   for (let i = 0; i < MASK_DIM * MASK_DIM; i++) {
-    const v = Math.round(maskRaw[i] * 255);
+    const v = Math.round(Math.pow(maskRaw[i], 1.5) * 255);
     md.data[i * 4] = md.data[i * 4 + 1] = md.data[i * 4 + 2] = md.data[i * 4 + 3] = v;
   }
   _mcCtx.putImageData(md, 0, 0);
 
-  // Step 2: reuse 640×640 canvas — bilinear upscale
+  // Step 2: reuse 640×640 canvas — MUST clear first or old masks accumulate
+  // via source-over compositing and the whole screen turns green over time.
   if (!_sc) {
     _sc = document.createElement("canvas");
     _sc.width  = INPUT_SIZE;
@@ -164,9 +168,10 @@ function upscaleMask(maskRaw, scale, padX, padY, vw, vh) {
     _scCtx.imageSmoothingEnabled = true;
     _scCtx.imageSmoothingQuality = "high";
   }
+  _scCtx.clearRect(0, 0, INPUT_SIZE, INPUT_SIZE);
   _scCtx.drawImage(_mc, 0, 0, INPUT_SIZE, INPUT_SIZE);
 
-  // Step 3: reuse video-size canvas — crop padding + scale to video resolution
+  // Step 3: reuse video-size canvas — MUST clear first (same accumulation reason)
   if (!_fc || _fcW !== vw || _fcH !== vh) {
     _fc = document.createElement("canvas");
     _fc.width  = vw;
@@ -177,10 +182,11 @@ function upscaleMask(maskRaw, scale, padX, padY, vw, vh) {
     _fcW = vw;
     _fcH = vh;
   }
+  _fcCtx.clearRect(0, 0, vw, vh);
   _fcCtx.drawImage(_sc, padX, padY, vw * scale, vh * scale, 0, 0, vw, vh);
 
   // Step 4: smoothstep S-curve — compresses bilinear gradient into crisp 1-2px edge
-  const EDGE_LO = 0.35, EDGE_HI = 0.65;
+  const EDGE_LO = 0.42, EDGE_HI = 0.58; // tighter band → crisper car outline
   const rawPx = _fcCtx.getImageData(0, 0, vw, vh).data;
   const pixels = vw * vh;
   if (!_opacity || _bufVw !== vw || _bufVh !== vh) {
@@ -210,7 +216,9 @@ function upscaleMask(maskRaw, scale, padX, padY, vw, vh) {
  */
 export async function segmentCarInVideoFrame(video) {
   if (!video?.videoWidth) return null;
+  if (!tryAcquireOnnxLock()) return INFERENCE_SKIPPED;
 
+  try {
   const [session, ort] = await Promise.all([getSegSession(), getOrt()]);
 
   const { float32, scale, padX, padY, vw, vh } = preprocessWithLetterbox(video);
@@ -303,7 +311,15 @@ export async function segmentCarInVideoFrame(video) {
     }
   }
 
-  return { carMask: _composite, detectionCount: kept.length };
+  // Copy working buffer → stable display buffer (overlay reads _display, never _composite).
+  // This prevents the overlay from seeing the zeroed working buffer mid-inference.
+  if (!_display || _display.length !== pixels) _display = new Uint8ClampedArray(pixels);
+  _display.set(_composite);
+
+  return { carMask: _display, detectionCount: kept.length };
+  } finally {
+    releaseOnnxLock();
+  }
 }
 
 export function resetSegSession() {
@@ -313,5 +329,6 @@ export function resetSegSession() {
   _mc = null; _mcCtx = null;
   _sc = null; _scCtx = null;
   _fc = null; _fcCtx = null; _fcW = 0; _fcH = 0;
-  _prepFloat32 = null; _maskRaw = null; _opacity = null; _composite = null; _bufVw = 0; _bufVh = 0;
+  _prepFloat32 = null; _maskRaw = null; _opacity = null;
+  _composite = null; _display = null; _bufVw = 0; _bufVh = 0;
 }

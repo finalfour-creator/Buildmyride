@@ -5,14 +5,16 @@ import {
   checkPartsModelAvailable,
   detectPartsInVideoFrame,
 } from "../lib/yoloCarParts";
+import { INFERENCE_SKIPPED } from "../lib/onnxSetup";
 
 function isMobileDevice() {
   if (typeof navigator === "undefined") return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-const FRAME_SKIP_DESKTOP = 3;
-const FRAME_SKIP_MOBILE  = 8;
+// skip=5 so parts never fires on the same frame as detection (skip=3); LCM(3,5)=15
+const FRAME_SKIP_DESKTOP = 5;
+const FRAME_SKIP_MOBILE  = 9;
 const CLEAR_AFTER_MISSES = 5;
 
 /**
@@ -51,6 +53,7 @@ export default function useYoloCarParts(videoRef, isCameraActive) {
 
     try {
       const result = await detectPartsInVideoFrame(video);
+      if (result === INFERENCE_SKIPPED) return; // WASM busy — don't count as miss
       if (result) {
         missedRef.current = 0;
         setParts(result);

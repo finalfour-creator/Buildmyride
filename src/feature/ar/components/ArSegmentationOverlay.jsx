@@ -49,6 +49,7 @@ export default function ArSegmentationOverlay({
     // Cached paint-colour parse so we don't parseInt every frame
     let lastPaintColor = undefined;
     let pr = 0, pg = 0, pb = 0;
+    let invTargetLum = 0; // 1 / luminance(target color), pre-computed on color change
 
     // object-fit:cover geometry (mirrors ArDetectionOverlay logic)
     const getGeometry = (vw, vh, cw, ch) => {
@@ -118,6 +119,11 @@ export default function ArSegmentationOverlay({
           pr = parseInt(hex.slice(0, 2), 16);
           pg = parseInt(hex.slice(2, 4), 16);
           pb = parseInt(hex.slice(4, 6), 16);
+          // Inverse luminance of target color — lets us ratio-scale per pixel
+          const tl = (0.299 * pr + 0.587 * pg + 0.114 * pb) / 255;
+          invTargetLum = tl > 0.001 ? 1 / tl : 0;
+        } else {
+          invTargetLum = 0;
         }
       }
 
@@ -145,25 +151,29 @@ export default function ArSegmentationOverlay({
           pixelBuf[pi]     = 0;
           pixelBuf[pi + 1] = 210;
           pixelBuf[pi + 2] = 90;
-          pixelBuf[pi + 3] = Math.round(maskOpacity * 0.55);
+          pixelBuf[pi + 3] = Math.round(maskOpacity * 0.40);
           continue;
         }
 
-        // Paint mode — luminance-preserving colour overlay (ITU-R BT.601)
+        // Paint mode — exact luminance-ratio colour overlay
+        // scale = originalLum / targetLum  →  painted pixel has same brightness
+        // as the original surface, so shadows/highlights are perfectly preserved.
+        // Coverage capped at 0.92 so fine surface texture still shows through,
+        // making the result look like real paint rather than a flat colour filter.
         const r0 = framePixels[pi];
         const g0 = framePixels[pi + 1];
         const b0 = framePixels[pi + 2];
 
-        const lum    = (0.299 * r0 + 0.587 * g0 + 0.114 * b0) / 255;
-        const lScale = Math.min(2.0, lum * 1.8 + 0.05);
-        const rP = Math.min(255, Math.round(pr * lScale));
-        const gP = Math.min(255, Math.round(pg * lScale));
-        const bP = Math.min(255, Math.round(pb * lScale));
+        const lum   = (0.299 * r0 + 0.587 * g0 + 0.114 * b0) / 255;
+        const scale = Math.min(2.0, lum * invTargetLum);
+        const rP = Math.min(255, pr * scale + 0.5 | 0);
+        const gP = Math.min(255, pg * scale + 0.5 | 0);
+        const bP = Math.min(255, pb * scale + 0.5 | 0);
 
-        const t = maskOpacity / 255;
-        pixelBuf[pi]     = Math.round(rP * t + r0 * (1 - t));
-        pixelBuf[pi + 1] = Math.round(gP * t + g0 * (1 - t));
-        pixelBuf[pi + 2] = Math.round(bP * t + b0 * (1 - t));
+        const t = Math.min(0.92, maskOpacity / 255);
+        pixelBuf[pi]     = (rP * t + r0 * (1 - t) + 0.5) | 0;
+        pixelBuf[pi + 1] = (gP * t + g0 * (1 - t) + 0.5) | 0;
+        pixelBuf[pi + 2] = (bP * t + b0 * (1 - t) + 0.5) | 0;
         pixelBuf[pi + 3] = maskOpacity;
       }
 
