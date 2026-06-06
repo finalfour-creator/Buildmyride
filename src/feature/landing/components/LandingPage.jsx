@@ -6,7 +6,6 @@ import MainHeader from "./MainHeader";
 import HudHints from "./HudHints";
 import SwipeIndicators from "./SwipeIndicators";
 import ScrollSections from "./ScrollSections";
-import HudPanels from "./HudPanels";
 import "../landing.css";
 
 export default function LandingPage() {
@@ -53,7 +52,6 @@ export default function LandingPage() {
       <button id="btn-back" type="button">{"← EXTERIOR VIEW"}</button>
 
       <ScrollSections />
-      <HudPanels />
 
       <div id="toast" />
     </div>
