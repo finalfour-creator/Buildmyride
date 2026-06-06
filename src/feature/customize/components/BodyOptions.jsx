@@ -161,27 +161,7 @@ export default function BodyOptions({ selectedColor, setSelectedColor, colorPale
               }}
             />
           </Tooltip>
-
-          {displayPalette.map((color, i) => (
-            <Tooltip title={color.name || ""} key={i}>
-              <Box
-                onClick={() =>
-                  setSelectedColor(selectedColor === color.value ? null : color.value)
-                }
-                sx={{
-                  width: 38,
-                  height: 38,
-                  background: color.value,
-                  border: selectedColor === color.value ? "3px solid #fff" : "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  boxShadow: selectedColor === color.value ? "0 0 10px rgba(255,255,255,0.3)" : "none",
-                  "&:hover": { transform: "translateY(-2px)", borderColor: "rgba(255,255,255,0.5)" },
-                }}
-              />
-            </Tooltip>
-          ))}
+        </Box>
 
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.4 }}>
           {displayPalette.map((color, i) => {
@@ -315,9 +295,12 @@ export default function BodyOptions({ selectedColor, setSelectedColor, colorPale
               "&::-webkit-color-swatch": { border: "1px solid #2c5364", borderRadius: "4px" },
             }}
           />
-          <Typography sx={{ color: "#fff", fontSize: "0.8rem", fontFamily: "monospace", opacity: 0.7 }}>
-            {selectedColor ? selectedColor.toUpperCase() : "No paint"}
-          </Typography>
+          <Box
+            component="input"
+            type="color"
+            value={selectedColor || "#000000"}
+            onChange={(e) => setSelectedColor(e.target.value)}
+            sx={{
               position: "absolute", inset: 0,
               opacity: 0, cursor: "pointer", zIndex: 2,
               width: "100%", height: "100%",
