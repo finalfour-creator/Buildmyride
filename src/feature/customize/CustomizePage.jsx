@@ -422,38 +422,41 @@ export default function CustomizePage() {
       <Box sx={{
         position: "fixed", inset: 0,
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
         background: "#03060b",
         fontFamily: "'Inter', 'Roboto', sans-serif",
       }}>
 
-        {/* ── 3D Viewer fills the entire screen ── */}
-        <ThreeViewer
-          ref={viewerRef}
-          modelPath={modelUrl}
-          backgroundColor="#03060b"
-          modelColor={selectedPart === "body" ? selectedColor : null}
-          wheelReplacements={wheels}
-          spoilerReplacement={selectedSpoiler}
-          currentBuild={currentBuild}
-          onWheelClick={(posId) => {
-            setActiveWheelPosition(posId);
-            setSelectedPart("wheels");
-          }}
-          sx={{ position: "absolute", inset: 0 }}
-        />
+        <Box sx={{ position: "relative", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+          {/* ── 3D Viewer occupies the top area ── */}
+          <ThreeViewer
+            ref={viewerRef}
+            modelPath={modelUrl}
+            backgroundColor="#03060b"
+            modelColor={selectedPart === "body" ? selectedColor : null}
+            wheelReplacements={wheels}
+            spoilerReplacement={selectedSpoiler}
+            currentBuild={currentBuild}
+            onWheelClick={(posId) => {
+              setActiveWheelPosition(posId);
+              setSelectedPart("wheels");
+            }}
+            sx={{ position: "absolute", inset: 0 }}
+          />
 
-        {/* Attach flash overlay */}
-        <AttachFlash trigger={attachTrigger} />
+          {/* Attach flash overlay */}
+          <AttachFlash trigger={attachTrigger} />
 
-        {/* ── TOP HUD BAR ── */}
-        <Box sx={{
-          position: "absolute", top: 0, left: 0, right: 0,
-          zIndex: 100,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          px: 3, py: 1.5,
-          background: "linear-gradient(180deg, rgba(3,6,11,0.92) 0%, rgba(3,6,11,0) 100%)",
-          animation: "fadeUp 0.5s ease",
-        }}>
+          {/* ── TOP HUD BAR ── */}
+          <Box sx={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            zIndex: 100,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            px: 3, py: 1.5,
+            background: "linear-gradient(180deg, rgba(3,6,11,0.92) 0%, rgba(3,6,11,0) 100%)",
+            animation: "fadeUp 0.5s ease",
+          }}>
           {/* Left: branding */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
             <Typography sx={{
@@ -466,16 +469,10 @@ export default function CustomizePage() {
             <Box sx={{ width: 1, height: 18, background: "rgba(0,242,254,0.2)" }} />
             <Box>
               <Typography sx={{
-                color: "rgba(0,242,254,0.45)", fontSize: "0.52rem",
-                fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase",
+                color: "rgba(255,255,255,0.65)", fontSize: "0.72rem",
+                fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
               }}>
-                // SHOWROOM FLOOR
-              </Typography>
-              <Typography sx={{
-                color: "#fff", fontSize: "0.78rem", fontWeight: 700,
-                letterSpacing: "0.5px", lineHeight: 1.2,
-              }}>
-                {modelData?.name || "Vehicle Configurator"}
+                Vehicle Configurator
               </Typography>
             </Box>
             <SaveStatusPill saveStatus={saveStatus} isModified={isModified} />
@@ -483,6 +480,13 @@ export default function CustomizePage() {
 
           {/* Right: action buttons */}
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+            <GlowButton
+              onClick={() => router.push("/configurator/dashboard")}
+              color="#00f2fe"
+              icon="←"
+            >
+              Back
+            </GlowButton>
             {designId && (
               <GlowButton danger onClick={() => setDeleteDialogOpen(true)} color="#ff4d6d">
                 Delete
@@ -506,41 +510,42 @@ export default function CustomizePage() {
             </GlowButton>
           </Box>
         </Box>
+        </Box>
 
         {/* ── BOTTOM PARTS PANEL ── */}
         <Box sx={{
-          position: "absolute", bottom: 0, left: 0, right: 0,
           zIndex: 100,
-          height: 215,
+          height: 260,
           display: "flex", flexDirection: "column",
           background: "rgba(4,8,14,0.96)",
           backdropFilter: "blur(24px)",
           borderTop: "1px solid rgba(0,242,254,0.12)",
           boxShadow: "0 -4px 40px rgba(0,0,0,0.8)",
         }}>
-          {/* Thin cyan accent line at very top of panel */}
           <Box sx={{
             height: "1.5px", flexShrink: 0,
             background: "linear-gradient(90deg, transparent, rgba(0,242,254,0.5), transparent)",
           }} />
 
-          <PartSelector
-            parts={categories}
-            selectedPart={selectedPart}
-            onSelect={setSelectedPart}
-            availableParts={availableParts}
-            currentBuild={currentBuild}
-            onPartSelect={handlePartSelect}
-            selectedColor={selectedColor}
-            setSelectedColor={setSelectedColor}
-            colorPalette={colors.map(c => c.value)}
-            activeWheelPosition={activeWheelPosition}
-            wheels={wheels}
-            setWheels={setWheels}
-            onApplyAllWheels={(url) => setWheels({
-              "front-left": url, "front-right": url, "rear-left": url, "rear-right": url,
-            })}
-          />
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <PartSelector
+              parts={categories}
+              selectedPart={selectedPart}
+              onSelect={setSelectedPart}
+              availableParts={availableParts}
+              currentBuild={currentBuild}
+              onPartSelect={handlePartSelect}
+              selectedColor={selectedColor}
+              setSelectedColor={setSelectedColor}
+              colorPalette={colors.map(c => c.value)}
+              activeWheelPosition={activeWheelPosition}
+              wheels={wheels}
+              setWheels={setWheels}
+              onApplyAllWheels={(url) => setWheels({
+                "front-left": url, "front-right": url, "rear-left": url, "rear-right": url,
+              })}
+            />
+          </Box>
         </Box>
 
         {/* ── CORNER BRACKETS (HUD decoration) ── */}
