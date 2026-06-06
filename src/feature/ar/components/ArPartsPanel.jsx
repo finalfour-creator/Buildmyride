@@ -62,6 +62,7 @@ export default function ArPartsPanel({
   selectedView,
   enabledAnchors, setEnabledAnchors,
   isLocked,
+  partColors,    setPartColors,
 }) {
 
   return (
@@ -186,6 +187,8 @@ export default function ArPartsPanel({
             isLocked={isLocked}
             selectedColor={selectedColor}
             setSelectedColor={setSelectedColor}
+            partColors={partColors}
+            setPartColors={setPartColors}
           />
         )}
       </Box>
@@ -195,22 +198,87 @@ export default function ArPartsPanel({
 
 // ── Template mode panel ───────────────────────────────────────────────────────
 
-function TemplatePanel({ selectedView, enabledAnchors, setEnabledAnchors, isLocked, selectedColor, setSelectedColor }) {
+function PartColorRow({ label, colorKey, options, partColors, setPartColors }) {
+  const current = partColors?.[colorKey] ?? null;
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Typography sx={{ fontSize: "0.73rem", color: "#94a3b8", mb: 0.75, fontWeight: 600 }}>
+        {label}
+      </Typography>
+      <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+        {options.map((opt) => {
+          const isActive = current === opt.value;
+          return (
+            <Button
+              key={opt.label}
+              size="small"
+              onClick={() =>
+                setPartColors?.((prev) => ({ ...prev, [colorKey]: opt.value }))
+              }
+              sx={{
+                textTransform: "none",
+                fontSize:      "0.70rem",
+                py: 0.4, px: 1.2,
+                minWidth: 0,
+                borderRadius: "6px",
+                border: `1.5px solid ${isActive ? "#60a5fa" : "#334155"}`,
+                bgcolor: isActive ? "rgba(96,165,250,0.12)" : "transparent",
+                color:   isActive ? "#60a5fa" : "#64748b",
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+              }}
+            >
+              {opt.value && (
+                <Box
+                  sx={{
+                    width: 10, height: 10,
+                    borderRadius: "2px",
+                    bgcolor: opt.value,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              {opt.label}
+            </Button>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+}
+
+const WHEEL_KEYS = ["wheel_front", "wheel_rear", "wheel_front_v2", "wheel_rear_v2"];
+
+function TemplatePanel({ selectedView, enabledAnchors, setEnabledAnchors, isLocked, selectedColor, setSelectedColor, partColors, setPartColors }) {
   const anchors = selectedView ? ANCHOR_CONFIG[selectedView] ?? {} : {};
 
+  // Detect which wheel style is currently active
+  const wheelStyle =
+    enabledAnchors?.has("wheel_front_v2") ? "wheel2" :
+    enabledAnchors?.has("wheel_front")    ? "wheel1" :
+    "none";
+
+  const selectWheels = (style) => {
+    setEnabledAnchors((prev) => {
+      const next = new Set(prev);
+      WHEEL_KEYS.forEach((k) => next.delete(k));
+      if (style === "wheel1") { next.add("wheel_front"); next.add("wheel_rear"); }
+      if (style === "wheel2") { next.add("wheel_front_v2"); next.add("wheel_rear_v2"); }
+      return next;
+    });
+  };
+
   const toggle = (key) => {
+    if (WHEEL_KEYS.includes(key)) return; // wheels handled by the style picker
     setEnabledAnchors((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
       } else {
-        // Exclusive toggle logic for rear window stickers (window_sticker_1 vs window_sticker_2)
-        if (key === "window_sticker_1" && next.has("window_sticker_2")) {
-          next.delete("window_sticker_2");
-        }
-        if (key === "window_sticker_2" && next.has("window_sticker_1")) {
-          next.delete("window_sticker_1");
-        }
+        if (key === "window_sticker_1" && next.has("window_sticker_2")) next.delete("window_sticker_2");
+        if (key === "window_sticker_2" && next.has("window_sticker_1")) next.delete("window_sticker_1");
         next.add(key);
       }
       return next;
@@ -253,9 +321,52 @@ function TemplatePanel({ selectedView, enabledAnchors, setEnabledAnchors, isLock
         {VIEW_LABELS[selectedView]?.toUpperCase()} — AVAILABLE PARTS
       </Typography>
 
-      {/* Anchor toggles */}
+      {/* ── Wheel Style (side views only) ─────────────────────────── */}
+      {(selectedView === "left" || selectedView === "right") && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption"
+            sx={{ color: "#8a9aa8", letterSpacing: 1, fontWeight: 700, display: "block", mb: 1 }}>
+            WHEEL STYLE
+          </Typography>
+          <Box sx={{ display: "flex", gap: 0.75 }}>
+            {[
+              { id: "none",   label: "Off"     },
+              { id: "wheel1", label: "Wheel 1" },
+              { id: "wheel2", label: "Wheel 2" },
+            ].map(({ id, label }) => {
+              const active = wheelStyle === id;
+              return (
+                <Button
+                  key={id}
+                  size="small"
+                  onClick={() => selectWheels(id)}
+                  sx={{
+                    flex: 1,
+                    textTransform: "none",
+                    fontWeight:    active ? 700 : 400,
+                    fontSize:      "0.75rem",
+                    py: 0.6, px: 0,
+                    borderRadius:  "8px",
+                    border:   `1.5px solid ${active ? "#60a5fa" : "#334155"}`,
+                    bgcolor:  active ? "rgba(96,165,250,0.14)" : "transparent",
+                    color:    active ? "#60a5fa" : "#64748b",
+                    transition: "all 0.15s",
+                    "&:hover": { borderColor: "#60a5fa88", color: "#60a5fa" },
+                  }}
+                >
+                  {label}
+                </Button>
+              );
+            })}
+          </Box>
+        </Box>
+      )}
+
+      {/* Anchor toggles — wheel keys are handled above, excluded here */}
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, mb: 2 }}>
-        {Object.entries(anchors).map(([key, cfg]) => {
+        {Object.entries(anchors)
+          .filter(([key]) => !WHEEL_KEYS.includes(key))
+          .map(([key, cfg]) => {
           const enabled = enabledAnchors?.has(key) ?? false;
           const hasAsset = Boolean(cfg.model || cfg.texture);
           return (
@@ -329,6 +440,47 @@ function TemplatePanel({ selectedView, enabledAnchors, setEnabledAnchors, isLock
         PAINT COLOUR
       </Typography>
       <BodyOptions selectedColor={selectedColor} setSelectedColor={setSelectedColor} />
+
+      {/* ── Individual part colours ── */}
+      <Typography variant="caption"
+        sx={{ color: "#8a9aa8", letterSpacing: 1, fontWeight: 700, display: "block", mt: 2.5, mb: 1.25 }}>
+        PART COLOURS
+      </Typography>
+
+      <PartColorRow
+        label="Hood"
+        colorKey="hood"
+        options={[
+          { label: "Original", value: null },
+          { label: "Black",    value: "#111111" },
+          { label: "Red",      value: "#dc2626" },
+          { label: "Blue",     value: "#2563eb" },
+        ]}
+        partColors={partColors}
+        setPartColors={setPartColors}
+      />
+
+      <PartColorRow
+        label="Front Bumper"
+        colorKey="front_bumper"
+        options={[
+          { label: "Original", value: null },
+          { label: "Black",    value: "#111111" },
+        ]}
+        partColors={partColors}
+        setPartColors={setPartColors}
+      />
+
+      <PartColorRow
+        label="Rear Bumper"
+        colorKey="rear_bumper"
+        options={[
+          { label: "Original", value: null },
+          { label: "Black",    value: "#111111" },
+        ]}
+        partColors={partColors}
+        setPartColors={setPartColors}
+      />
     </Box>
   );
 }

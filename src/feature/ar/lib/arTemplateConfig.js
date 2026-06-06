@@ -88,7 +88,7 @@ export const ANCHOR_CONFIG = {
     hood_decal: {
       nx: 0.500, ny: 0.26, wz: 0.19,
       texture: "/images/decals/hood-1.png",
-      scale: 0.32, aspect: 1.0,
+      scale: 0.85, aspect: 1.4,
       label: "Hood Decal",
     },
   },
@@ -96,9 +96,9 @@ export const ANCHOR_CONFIG = {
   // ── REAR VIEW ──────────────────────────────────────────────────────────────
   rear: {
     spoiler: {
-      nx: 0.500, ny: 0.06, wz: 0.22,
+      nx: 0.500, ny: 0.04, wz: 0.25,
       model: "/models/Spoilers/city_spoiler_1.glb",
-      scale: 0.85, rotation: [0, 0, 0],
+      scale: 1.10, rotation: [0, Math.PI, 0],
       label: "Spoiler",
     },
     trunk: {
@@ -134,13 +134,13 @@ export const ANCHOR_CONFIG = {
     window_sticker_1: {
       nx: 0.500, ny: 0.28, wz: 0.15,
       texture: "/images/decals/rear-window-sticker-1.png",
-      scale: 0.40, aspect: 1.2,
+      scale: 0.88, aspect: 1.6,
       label: "Window Sticker (Logo)",
     },
     window_sticker_2: {
       nx: 0.500, ny: 0.28, wz: 0.15,
       texture: "/images/decals/rear-window-sticker-2.png",
-      scale: 0.40, aspect: 1.8,
+      scale: 0.88, aspect: 2.2,
       label: "Window Sticker (Text)",
     },
   },
@@ -150,16 +150,26 @@ export const ANCHOR_CONFIG = {
     wheel_front: {
       nx: 0.210, ny: 0.80, wz: 0.18,
       model: "/models/Wheels/Honda_City_Wheel1.glb",
-
       scale: 0.58, rotation: [0, Math.PI / 2, 0],
       label: "Front Wheel",
     },
     wheel_rear: {
       nx: 0.790, ny: 0.80, wz: 0.18,
       model: "/models/Wheels/Honda_City_Wheel1.glb",
-
       scale: 0.58, rotation: [0, Math.PI / 2, 0],
       label: "Rear Wheel",
+    },
+    wheel_front_v2: {
+      nx: 0.210, ny: 0.80, wz: 0.18,
+      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      scale: 0.58, rotation: [0, Math.PI / 2, 0],
+      label: "Front Wheel (Style 2)",
+    },
+    wheel_rear_v2: {
+      nx: 0.790, ny: 0.80, wz: 0.18,
+      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      scale: 0.58, rotation: [0, Math.PI / 2, 0],
+      label: "Rear Wheel (Style 2)",
     },
     door_front: {
       nx: 0.360, ny: 0.53, wz: 0.08,
@@ -174,33 +184,47 @@ export const ANCHOR_CONFIG = {
       label: "Rear Door",
     },
     racing_stripe: {
-      nx: 0.500, ny: 0.58, wz: 0.10,
+      nx: 0.500, ny: 0.92, wz: 0.10,
       texture: "/images/decals/racing-stripL-1.png",
-      scale: 0.20, aspect: 5.5,
+      // reduced to match expected smaller stripe
+      scale: 0.12, aspect: 5.5,
       label: "Racing Stripe",
     },
     side_graphic: {
-      nx: 0.440, ny: 0.58, wz: 0.11,
+      nx: 0.440, ny: 0.78, wz: 0.11,
       texture: "/images/decals/side-graphic-1.png",
-      scale: 0.30, aspect: 1.5,
+      // reduced + shifted down (bottom half of rear door)
+      scale: 0.18, aspect: 1.5,
       label: "Side Graphic",
     },
   },
+
 
   // ── RIGHT SIDE VIEW ────────────────────────────────────────────────────────
   right: {
     wheel_front: {
       nx: 0.790, ny: 0.80, wz: 0.18,
       model: "/models/Wheels/Honda_City_Wheel1.glb",
-
       scale: 0.58, rotation: [0, -Math.PI / 2, 0],
       label: "Front Wheel",
     },
     wheel_rear: {
       nx: 0.210, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_BR_Tyre.glb",
+      model: "/models/Wheels/Honda_City_Wheel1.glb",
       scale: 0.58, rotation: [0, -Math.PI / 2, 0],
       label: "Rear Wheel",
+    },
+    wheel_front_v2: {
+      nx: 0.790, ny: 0.80, wz: 0.18,
+      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      scale: 0.58, rotation: [0, -Math.PI / 2, 0],
+      label: "Front Wheel (Style 2)",
+    },
+    wheel_rear_v2: {
+      nx: 0.210, ny: 0.80, wz: 0.18,
+      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      scale: 0.58, rotation: [0, -Math.PI / 2, 0],
+      label: "Rear Wheel (Style 2)",
     },
     door_front: {
       nx: 0.640, ny: 0.53, wz: 0.08,

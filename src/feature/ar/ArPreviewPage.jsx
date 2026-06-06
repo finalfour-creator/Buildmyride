@@ -57,12 +57,16 @@ export default function ArPreviewPage() {
   // Template mode state
   const [selectedView,   setSelectedView]   = useState(null);       // "front"|"left"|"right"|"rear"
   const [enabledAnchors, setEnabledAnchors] = useState(new Set());  // anchor keys to render
+  const [partColors,     setPartColors]     = useState({});         // { hood, front_bumper, rear_bumper }
 
-  // Automatically enable all assets for the selected view by default
+  // Automatically enable all assets for the selected view by default.
+  // v2 wheel variants are excluded — they are activated by the Wheel Style picker.
   useEffect(() => {
     if (selectedView) {
       const anchors = ANCHOR_CONFIG[selectedView] ?? {};
-      setEnabledAnchors(new Set(Object.keys(anchors)));
+      setEnabledAnchors(
+        new Set(Object.keys(anchors).filter((k) => !k.endsWith("_v2")))
+      );
     } else {
       setEnabledAnchors(new Set());
     }
@@ -526,6 +530,7 @@ export default function ArPreviewPage() {
               paintColor={selectedColor}
               overlayBox={overlayBox}
               parts={parts}
+              partColors={partColors}
             />
           )}
         </Box>
@@ -541,6 +546,8 @@ export default function ArPreviewPage() {
           enabledAnchors={enabledAnchors}
           setEnabledAnchors={setEnabledAnchors}
           isLocked={isLocked}
+          partColors={partColors}
+          setPartColors={setPartColors}
         />
       </Box>
     </Box>
