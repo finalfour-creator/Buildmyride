@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Box } from "@mui/material";
+import { Box, CircularProgress, Typography, Button } from "@mui/material";
 import DesignCard from "@/feature/dashboard/components/DesignCard";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import apiClient from "@/lib/axios";
 import { useSearchParams } from "next/navigation";
 
@@ -15,33 +15,47 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState(tabParam || "designs");
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   // Sync tab with URL param
   useEffect(() => {
     if (tabParam) setActiveTab(tabParam);
   }, [tabParam]);
 
-  // ✅ FETCH REAL DESIGNS FROM DB
+  const fetchDesigns = useCallback(async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const res = await apiClient.get("/designs");
+      const data = Array.isArray(res.data)
+        ? res.data
+        : res.data?.designs ?? res.data?.data ?? [];
+      setDesigns(data);
+    } catch (error) {
+      console.error("Failed to fetch designs:", error);
+      setFetchError("Could not load your designs. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated") {
-      const fetchDesigns = async () => {
-        try {
-          const res = await apiClient.get("/designs");
-          setDesigns(res.data);
-        } catch (error) {
-          console.error("Failed to fetch designs:", error);
-        } finally {
-          setLoading(false);
-        }
-      };
       fetchDesigns();
+    } else if (status === "unauthenticated") {
+      setLoading(false);
     }
-  }, [status]);
+  }, [status, fetchDesigns]);
 
   const userName = session?.user?.name || "User";
 
   if (status === "loading" || (status === "authenticated" && loading)) {
-    return <h1 style={{ padding: 20 }}>Loading your designs...</h1>;
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 4 }}>
+        <CircularProgress size={28} sx={{ color: "#2c5364" }} />
+        <Typography>Loading your designs…</Typography>
+      </Box>
+    );
   }
 
   const recentActivity = [
@@ -114,7 +128,14 @@ export default function DashboardPage() {
       {/* Content */}
       {activeTab === "designs" && (
         <Box>
-          {designs.length > 0 ? (
+          {fetchError ? (
+            <Box sx={{ textAlign: "center", py: 10, background: "white", border: "1px solid #fca5a5" }}>
+              <Typography color="error" mb={2}>{fetchError}</Typography>
+              <Button onClick={fetchDesigns} variant="contained" sx={{ background: "linear-gradient(135deg, #0f2027, #2c5364)", color: "white" }}>
+                Retry
+              </Button>
+            </Box>
+          ) : designs.length > 0 ? (
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 3 }}>
               {designs.map((design) => (
                 <DesignCard key={design._id} {...design} />
