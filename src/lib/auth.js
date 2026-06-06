@@ -2,7 +2,7 @@
 
 import CredentialsProvider from "next-auth/providers/credentials";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api").replace(/\/+$/, "");
 
 export const authOptions = {
   providers: [
@@ -12,7 +12,7 @@ export const authOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-async authorize(credentials) {
+      async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         try {
           const res = await fetch(`${apiUrl}/auth/login`, {

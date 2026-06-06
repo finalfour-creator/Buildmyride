@@ -1,7 +1,21 @@
 import axios from "axios";
 import { getSession } from "next-auth/react";
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const normalizeApiBase = (url) => {
+  const trimmed = (url || "").trim();
+  if (!trimmed) return "http://localhost:5000/api";
+
+  // remove trailing slashes
+  const noTrailing = trimmed.replace(/\/+$/, "");
+
+  // already ends with /api
+  if (noTrailing.toLowerCase().endsWith("/api")) return noTrailing;
+
+  // if it ends with something like /api/.. handled above; otherwise append /api
+  return `${noTrailing}/api`;
+};
+
+const baseURL = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
 
 /**
  * Axios instance for backend API. Attaches Bearer token from NextAuth session when available.
