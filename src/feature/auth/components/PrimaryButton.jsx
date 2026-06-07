@@ -1,10 +1,12 @@
 "use client";
 import Button from "@mui/material/Button";
 
-export default function PrimaryButton({ children, onClick, inverted = false }) {
+export default function PrimaryButton({ children, onClick, inverted = false, type = "button", disabled = false }) {
   return (
     <Button
+      type={type}
       onClick={onClick}
+      disabled={disabled}
       fullWidth
       variant={inverted ? "outlined" : "contained"}
       sx={{

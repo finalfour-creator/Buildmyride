@@ -1,21 +1,30 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Divider from "@mui/material/Divider";
 import Input from "./components/Input";
 import PrimaryButton from "./components/PrimaryButton";
-import GoogleIcon from "./components/GoogleIcon";
 
-// ✅ UPDATED COLORS
 const ACCENT = "#2c5364";
 const SLIDING_BG = "linear-gradient(135deg, #0f2027, #203a43, #2c5364)";
+
+const passwordRules = {
+  required: "Password is required",
+  minLength: { value: 8, message: "At least 8 characters" },
+  validate: {
+    uppercase: (v) => /[A-Z]/.test(v) || "Needs 1 uppercase letter (A-Z)",
+    lowercase: (v) => /[a-z]/.test(v) || "Needs 1 lowercase letter (a-z)",
+    number: (v) => /[0-9]/.test(v) || "Needs 1 number (0-9)",
+    special: (v) => /[!@#$%^&*(),.?":{}|<>]/.test(v) || "Needs 1 special character",
+  },
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,95 +33,70 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
 
   // Login form
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const {
+    register: loginRegister,
+    handleSubmit: handleLoginSubmit,
+    setError: setLoginError,
+    formState: { errors: loginErrors, isSubmitting: loginSubmitting },
+  } = useForm();
 
   // Register form
-  const [name, setName] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regPasswordError, setRegPasswordError] = useState("");
-  const [regError, setRegError] = useState("");
+  const {
+    register: regRegister,
+    handleSubmit: handleRegSubmit,
+    setError: setRegError,
+    reset: resetRegForm,
+    formState: { errors: regErrors, isSubmitting: regSubmitting },
+  } = useForm();
 
-  // Password validation function
-  const validatePassword = (password) => {
-    const errors = [];
-    if (password.length < 8) errors.push("at least 8 characters");
-    if (!/[A-Z]/.test(password)) errors.push("1 uppercase letter (A-Z)");
-    if (!/[a-z]/.test(password)) errors.push("1 lowercase letter (a-z)");
-    if (!/[0-9]/.test(password)) errors.push("1 number (0-9)");
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) errors.push("1 special character (!@#$%^&*)");
-    return errors;
-  };
+  const [regServerError, setRegServerError] = useState("");
 
-  // ✅ LOGIN USING NEXTAUTH (so name appears in session)
-  const handleLogin = async () => {
-    setEmailError("");
-    setPasswordError("");
-
+  const handleLogin = async (data) => {
     const result = await signIn("credentials", {
-      email,
-      password,
+      email: data.email,
+      password: data.password,
       redirect: false,
     });
 
     if (result?.error) {
-      // Try to parse the error message
       try {
         const errorData = JSON.parse(result.error);
         if (errorData.field === "email") {
-          setEmailError(errorData.message);
+          setLoginError("email", { message: errorData.message });
         } else if (errorData.field === "password") {
-          setPasswordError(errorData.message);
+          setLoginError("password", { message: errorData.message });
         } else {
-          setEmailError("Invalid email or password");
+          setLoginError("email", { message: "Invalid email or password" });
         }
       } catch {
-        setEmailError("Invalid email or password");
+        setLoginError("email", { message: "Invalid email or password" });
       }
     } else {
       router.push("/configurator/dashboard");
     }
   };
 
-  // ✅ REGISTER FUNCTION
-  const handleRegister = async () => {
-    setRegError("");
-
-    // Validate password
-    const passwordErrors = validatePassword(regPassword);
-    if (passwordErrors.length > 0) {
-      setRegPasswordError(`Password must contain: ${passwordErrors.join(", ")}`);
-      return;
-    }
-    setRegPasswordError("");
-
+  const handleRegister = async (data) => {
+    setRegServerError("");
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
       const res = await fetch(`${apiBase}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email: regEmail, password: regPassword }),
+        body: JSON.stringify({ name: data.name, email: data.email, password: data.password }),
       });
 
-      const data = await res.json();
+      const resData = await res.json();
 
       if (!res.ok) {
-        setRegError(data.message || "Registration failed");
+        setRegServerError(resData.message || "Registration failed");
         return;
       }
 
-      // Registration successful - clear form and switch to login
-      setName("");
-      setRegEmail("");
-      setRegPassword("");
+      resetRegForm();
       setIsToggled(false);
-      setRegError("");
-
-    } catch (error) {
-      setRegError("Connection error. Please try again.");
+    } catch {
+      setRegServerError("Connection error. Please try again.");
     }
   };
 
@@ -126,25 +110,27 @@ export default function LoginPage() {
       <Box sx={{ width: "85%", maxWidth: 1000, height: "65vh", borderRadius: 6, background: "rgba(26,26,29,0.15)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 40px 100px rgba(0,0,0,0.5)", position: "relative", display: "flex", overflow: "hidden", opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(30px)", transition: "all 0.8s cubic-bezier(0.23, 1, 0.32, 1)" }}>
 
         {/* SIGN IN PANEL */}
-        <Box sx={{ width: "50%", p: "60px", display: "flex", flexDirection: "column", justifyContent: "center", opacity: isToggled ? 0 : 1, pointerEvents: isToggled ? "none" : "all", transition: "opacity 0.6s" }}>
+        <Box
+          component="form"
+          onSubmit={handleLoginSubmit(handleLogin)}
+          sx={{ width: "50%", p: "60px", display: "flex", flexDirection: "column", justifyContent: "center", opacity: isToggled ? 0 : 1, pointerEvents: isToggled ? "none" : "all", transition: "opacity 0.6s" }}
+        >
           <Typography variant="h4" fontWeight={700} mb={3} color="#fff">Sign In</Typography>
 
           <Input
             label="Email"
             type="email"
-            value={email}
-            onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
-            error={!!emailError}
-            helperText={emailError}
+            registration={loginRegister("email", { required: "Email is required" })}
+            error={!!loginErrors.email}
+            helperText={loginErrors.email?.message}
           />
 
           <Input
             label="Password"
             type="password"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
-            error={!!passwordError}
-            helperText={passwordError}
+            registration={loginRegister("password", { required: "Password is required" })}
+            error={!!loginErrors.password}
+            helperText={loginErrors.password?.message}
           />
 
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
@@ -152,7 +138,9 @@ export default function LoginPage() {
             <Link href="#" style={{ color: ACCENT, textDecoration: "none", fontSize: 13, fontWeight: 500 }}>Forgot Password?</Link>
           </Box>
 
-          <PrimaryButton onClick={handleLogin}>Login</PrimaryButton>
+          <PrimaryButton type="submit" disabled={loginSubmitting}>
+            {loginSubmitting ? "Signing in..." : "Login"}
+          </PrimaryButton>
 
           <Divider sx={{ my: 2, "&::before, &::after": { borderColor: "rgba(255,255,255,0.1)" } }}>
             <Typography sx={{ fontSize: 13, color: "#888", px: 1 }}>or</Typography>
@@ -161,37 +149,45 @@ export default function LoginPage() {
         </Box>
 
         {/* CREATE ACCOUNT PANEL */}
-        <Box sx={{ width: "50%", p: "60px", display: "flex", flexDirection: "column", justifyContent: "center", opacity: isToggled ? 1 : 0, pointerEvents: isToggled ? "all" : "none", transition: "opacity 0.6s" }}>
+        <Box
+          component="form"
+          onSubmit={handleRegSubmit(handleRegister)}
+          sx={{ width: "50%", p: "60px", display: "flex", flexDirection: "column", justifyContent: "center", opacity: isToggled ? 1 : 0, pointerEvents: isToggled ? "all" : "none", transition: "opacity 0.6s" }}
+        >
           <Typography variant="h4" fontWeight={700} mb={3} color="#fff">Create Account</Typography>
 
-          <Input label="Full Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input label="Email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+          <Input
+            label="Full Name"
+            registration={regRegister("name", { required: "Name is required" })}
+            error={!!regErrors.name}
+            helperText={regErrors.name?.message}
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            registration={regRegister("email", { required: "Email is required" })}
+            error={!!regErrors.email}
+            helperText={regErrors.email?.message}
+          />
 
           <Input
             label="Password"
             type="password"
-            value={regPassword}
-            onChange={(e) => {
-              const newPassword = e.target.value;
-              setRegPassword(newPassword);
-              const errors = validatePassword(newPassword);
-              if (errors.length > 0) {
-                setRegPasswordError(`Password must contain: ${errors.join(", ")}`);
-              } else {
-                setRegPasswordError("");
-              }
-            }}
-            error={!!regPasswordError}
-            helperText={regPasswordError}
+            registration={regRegister("password", passwordRules)}
+            error={!!regErrors.password}
+            helperText={regErrors.password?.message}
           />
 
-          {regError && (
+          {regServerError && (
             <Typography sx={{ color: "#f44336", fontSize: 12, mb: 2, textAlign: "center" }}>
-              {regError}
+              {regServerError}
             </Typography>
           )}
 
-          <PrimaryButton onClick={handleRegister}>Register</PrimaryButton>
+          <PrimaryButton type="submit" disabled={regSubmitting}>
+            {regSubmitting ? "Registering..." : "Register"}
+          </PrimaryButton>
         </Box>
 
         {/* SLIDING PANEL */}

@@ -117,6 +117,13 @@ export default function initLandingScene() {
   const INT_POS = new THREE.Vector3(0, 1.3, 2.0);
   const INT_TGT = new THREE.Vector3(0, 1.1, -1.5);
 
+  const SECTION_CAMS = [
+    { pos: [0, 2.4, 9.5], target: [0, 0.6, 0] },
+    { pos: [-5.5, 1.8, 6.2], target: [0, 0.1, 0] },
+    { pos: [5.5, 1.0, -4.0], target: [0, 0, 0] },
+    { pos: [4.5, 2.2, 5.5], target: [0, 0.5, 0] },
+  ];
+
   let rafId = null, telemetryInterval = null, started = false, destroyed = false;
   const cleanups = [];
   const timeouts = [];
@@ -423,31 +430,6 @@ export default function initLandingScene() {
     hoveredDoor = null;
   }
 
-  /* ── SCROLL ─────────────────────────────────────────────────── */
-  function onScroll() {
-    const max = document.documentElement.scrollHeight - innerHeight;
-    const t = Math.min(Math.max(window.scrollY / max, 0), 1);
-    const sp = $("scroll-prog"); if (sp) sp.style.width = (t * 100) + "%";
-    const lvl = t < 0.33 ? 1 : t < 0.66 ? 2 : 3;
-    if (lvl !== activeLevel) { activeLevel = lvl; updateSections(); updateHUD(); }
-    if (carGroup && !isInterior) {
-      const angle = t > 0.08 ? Math.PI / 13 : 0;
-      if (leftDoorGrp) gsap.to(leftDoorGrp.rotation, { z: -angle, duration: 0.6, overwrite: true });
-      if (rightDoorGrp) gsap.to(rightDoorGrp.rotation, { z: angle, duration: 0.6, overwrite: true });
-    }
-  }
-
-  function updateSections() { document.querySelectorAll(".ssec").forEach((el, i) => { el.classList.toggle("on", i + 1 === activeLevel); }); }
-
-  function updateHUD() {
-    ["lv1", "lv2", "lv3"].forEach((id, i) => {
-      const el = $(id); if (!el) return;
-      if (i + 1 < activeLevel) { el.textContent = "CLEARED"; el.style.color = "rgba(0,255,204,.38)"; }
-      else if (i + 1 === activeLevel) { el.textContent = "ACTIVE"; el.style.color = "var(--cp)"; }
-      else { el.textContent = "LOCKED"; el.style.color = "rgba(232,234,246,.28)"; }
-    });
-    ["pb1", "pb2", "pb3"].forEach((id, i) => { const el = $(id); if (el) el.style.width = (i + 1 < activeLevel ? 100 : i + 1 === activeLevel ? 65 : 0) + "%"; });
-  }
 
   /* ── DIM ────────────────────────────────────────────────────── */
   function toggleDim() {
@@ -515,6 +497,29 @@ export default function initLandingScene() {
     if (renderer && scene && camera) renderer.render(scene, camera);
   }
 
+  /* ── SECTION NAVIGATION ───────────────────────────────────── */
+  function onSectionChange(e) {
+    const idx = e.detail;
+    const cam = SECTION_CAMS[idx];
+    if (!cam || !camera || !controls) return;
+    if (isInterior) {
+      isInterior = false;
+      controls.minDistance = 4; controls.maxDistance = 16;
+      controls.minAzimuthAngle = -Infinity; controls.maxAzimuthAngle = Infinity;
+      controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI * 0.85;
+      $("btn-back")?.classList.remove("in");
+      [leftDoorGrp, rightDoorGrp].forEach((g) => { if (g) gsap.to(g.rotation, { z: 0, duration: 0.5 }); });
+    }
+    cameraTransitioning = true;
+    controls.enabled = false;
+    gsap.to(camera.position, { x: cam.pos[0], y: cam.pos[1], z: cam.pos[2], duration: 1.5, ease: "power3.inOut" });
+    gsap.to(controls.target, {
+      x: cam.target[0], y: cam.target[1], z: cam.target[2], duration: 1.5, ease: "power3.inOut",
+      onUpdate: () => controls.update(),
+      onComplete: () => { cameraTransitioning = false; controls.enabled = true; controls.update(); },
+    });
+  }
+
   /* ── BOOT ───────────────────────────────────────────────────── */
   function boot() {
     if (started) return;
@@ -526,16 +531,15 @@ export default function initLandingScene() {
     started = true;
     init3D();
     later(() => {
-      ["main-header", "hud-left", "hud-right", "hud-hints"].forEach((id) => { $(id)?.classList.add("in"); });
-      $("swipe-ext")?.classList.add("in");
+      $("landing-nav")?.classList.add("in");
     }, 700);
     later(() => {
       $("lb-top")?.classList.add("gone");
       $("lb-bot")?.classList.add("gone");
     }, 2600);
-    on(window, "scroll", onScroll, { passive: true });
+    on(window, "landing:section", onSectionChange);
     on(window, "keydown", onKey);
-    telemetryInterval = setInterval(pulseTelemetry, 3200);
+    window.dispatchEvent(new CustomEvent("landing:booted"));
   }
 
   /* ── UI WIRING ──────────────────────────────────────────────── */
