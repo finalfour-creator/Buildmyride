@@ -106,12 +106,6 @@ export default function DashboardPage() {
               <p>Visualize modifications on your vehicle</p>
             </Box>
           </Link>
-          <Link href="/ai-assistant" style={{ textDecoration: "none" }}>
-            <Box sx={{ background: "linear-gradient(135deg, #2c5364, #1e3a5f)", p: 3, color: "white" }}>
-              <h3>AI Assistant</h3>
-              <p>Get intelligent design recommendations</p>
-            </Box>
-          </Link>
         </Box>
       </Box>
 
