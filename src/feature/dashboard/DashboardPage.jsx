@@ -185,24 +185,12 @@ export default function DashboardPage() {
           <Box sx={{ position: "absolute", top: 0, left: 0, width: 24, height: 24, borderTop: "1px solid rgba(0, 242, 254, 0.4)", borderLeft: "1px solid rgba(0, 242, 254, 0.4)", borderRadius: "12px 0 0 0" }} />
           <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderBottom: "1px solid rgba(0, 242, 254, 0.4)", borderRight: "1px solid rgba(0, 242, 254, 0.4)", borderRadius: "0 0 12px 0" }} />
 
-      {/* Quick Actions */}
-      <Box sx={{ mb: 6 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: "#0f2027", marginBottom: 20 }}>
-          Quick Actions
-        </h2>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(1, 1fr)", md: "repeat(3, 1fr)" }, gap: 3 }}>
-          <Link href="/configurator/customization" style={{ textDecoration: "none" }}>
-            <Box sx={{ background: "linear-gradient(135deg, #0f2027, #203a43)", p: 3, color: "white" }}>
-              <h3>New Design</h3>
-              <p>Create a custom vehicle configuration</p>
-            </Box>
-          </Link>
-          <Link href="/ar-view" style={{ textDecoration: "none" }}>
-            <Box sx={{ background: "linear-gradient(135deg, #203a43, #2c5364)", p: 3, color: "white" }}>
-              <h3>AR Preview</h3>
-              <p>Visualize modifications on your vehicle</p>
-            </Box>
-          </Link>
+          <Typography variant="h4" sx={{ color: "#ffffff", fontWeight: 700, fontFamily: "'Orbitron', sans-serif", letterSpacing: "0.05em", mb: 1, position: "relative", zIndex: 1 }}>
+            Welcome back, {userName}
+          </Typography>
+          <Typography sx={{ color: "rgba(255,255,255,0.6)", fontFamily: "'Outfit', sans-serif", fontSize: 14, position: "relative", zIndex: 1 }}>
+            Your vehicle design studio is ready
+          </Typography>
         </Box>
 
         {/* Quick Actions */}
