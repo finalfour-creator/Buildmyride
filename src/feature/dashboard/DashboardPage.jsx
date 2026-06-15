@@ -185,27 +185,24 @@ export default function DashboardPage() {
           <Box sx={{ position: "absolute", top: 0, left: 0, width: 24, height: 24, borderTop: "1px solid rgba(0, 242, 254, 0.4)", borderLeft: "1px solid rgba(0, 242, 254, 0.4)", borderRadius: "12px 0 0 0" }} />
           <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderBottom: "1px solid rgba(0, 242, 254, 0.4)", borderRight: "1px solid rgba(0, 242, 254, 0.4)", borderRadius: "0 0 12px 0" }} />
 
-          <h1 style={{
-            fontSize: 24, fontWeight: 900,
-            fontFamily: "'Orbitron', sans-serif",
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            color: "#e8eaf6", marginBottom: 6,
-          }}>
-            WELCOME BACK,{" "}
-            <span style={{
-              background: "linear-gradient(135deg, #00f2fe, #00ffcc)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-              fontWeight: 900,
-            }}>
-              {userName}
-            </span>
-          </h1>
-          <p style={{
-            fontSize: 14, color: "rgba(232, 234, 246, 0.6)",
-            fontFamily: "'Outfit', sans-serif", letterSpacing: "0.03em",
-          }}>
-            Continue your automotive design work or start a new project
-          </p>
+      {/* Quick Actions */}
+      <Box sx={{ mb: 6 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: "#0f2027", marginBottom: 20 }}>
+          Quick Actions
+        </h2>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(1, 1fr)", md: "repeat(3, 1fr)" }, gap: 3 }}>
+          <Link href="/configurator/customization" style={{ textDecoration: "none" }}>
+            <Box sx={{ background: "linear-gradient(135deg, #0f2027, #203a43)", p: 3, color: "white" }}>
+              <h3>New Design</h3>
+              <p>Create a custom vehicle configuration</p>
+            </Box>
+          </Link>
+          <Link href="/ar-view" style={{ textDecoration: "none" }}>
+            <Box sx={{ background: "linear-gradient(135deg, #203a43, #2c5364)", p: 3, color: "white" }}>
+              <h3>AR Preview</h3>
+              <p>Visualize modifications on your vehicle</p>
+            </Box>
+          </Link>
         </Box>
 
         {/* Quick Actions */}

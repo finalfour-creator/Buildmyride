@@ -30,7 +30,6 @@ export default function LoginPage() {
   const router = useRouter();
   const [isToggled, setIsToggled] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
 
   // Login form
   const {
@@ -80,7 +79,7 @@ export default function LoginPage() {
     setRegServerError("");
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${apiBase}/api/auth/register`, {
+      const res = await fetch(`${apiBase}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: data.name, email: data.email, password: data.password }),
@@ -133,8 +132,7 @@ export default function LoginPage() {
             helperText={loginErrors.password?.message}
           />
 
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-            <FormControlLabel control={<Checkbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} size="small" sx={{ color: "#aaa", "&.Mui-checked": { color: ACCENT }, p: 0.5 }} />} label={<Typography sx={{ fontSize: 13, color: "#aaa" }}>Remember me</Typography>} />
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
             <Link href="#" style={{ color: ACCENT, textDecoration: "none", fontSize: 13, fontWeight: 500 }}>Forgot Password?</Link>
           </Box>
 

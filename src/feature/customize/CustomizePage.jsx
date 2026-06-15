@@ -3,7 +3,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Box, Typography, Button, Tooltip, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
 import PartSelector from "./components/PartSelector";
-import AiChatbox from "./components/AiChatbox";
 import apiClient from "@/lib/axios";
 import { useSearchParams, useRouter } from "next/navigation";
 
@@ -267,7 +266,6 @@ export default function CustomizePage() {
   // Snackbar feedback
   const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [modelData, setModelData] = useState(null);
   const [modelUrl, setModelUrl] = useState();
   const [loadingModel, setLoadingModel] = useState(true);
@@ -500,14 +498,6 @@ export default function CustomizePage() {
             >
               {saveStatus === "saving" ? "Saving…" : "Save Design"}
             </GlowButton>
-            <GlowButton
-              variant="contained"
-              onClick={() => setIsChatOpen(true)}
-              color="#00f2fe"
-              icon="✦"
-            >
-              AI Assistant
-            </GlowButton>
           </Box>
         </Box>
         </Box>
@@ -609,8 +599,6 @@ export default function CustomizePage() {
           </Alert>
         </Snackbar>
 
-        {/* ══ AI Chatbox ══ */}
-        <AiChatbox isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
       </Box>
     </>
   );
