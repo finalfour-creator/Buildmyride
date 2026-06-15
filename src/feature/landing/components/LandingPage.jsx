@@ -1,39 +1,40 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import initLandingScene from "../lib/landingScene";
+import useScrollNavigation from "../hooks/useScrollNavigation";
 import LoadingOverlay from "./LoadingOverlay";
-import MainHeader from "./MainHeader";
-import HudHints from "./HudHints";
-import SwipeIndicators from "./SwipeIndicators";
-import ScrollSections from "./ScrollSections";
+import Navbar from "./Navbar";
+import ProgressBar from "./ProgressBar";
+import HeroSection from "./HeroSection";
+import FeaturesSection from "./FeaturesSection";
+import ARPreviewSection from "./ARPreviewSection";
+import CTASection from "./CTASection";
 import "../landing.css";
 
+const TOTAL_SECTIONS = 4;
+
 export default function LandingPage() {
-  // Boot the imperative Three.js + audio experience once the markup is mounted.
+  const [booted, setBooted] = useState(false);
+  const { activeIndex } = useScrollNavigation(TOTAL_SECTIONS, booted);
+
   useEffect(() => {
     const cleanup = initLandingScene();
-    return cleanup;
+    const onBooted = () => setBooted(true);
+    window.addEventListener("landing:booted", onBooted);
+    return () => {
+      cleanup();
+      window.removeEventListener("landing:booted", onBooted);
+    };
   }, []);
 
   return (
     <div className="landing-root">
-      {/* Fonts used by the experience */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link
-        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;600;700&display=swap"
-        rel="stylesheet"
-      />
-
       <LoadingOverlay />
 
       <div className="lb" id="lb-top" />
       <div className="lb" id="lb-bot" />
-      <div id="scroll-prog" />
       <div id="blur-ov" />
       <div id="flash" />
-
-      <MainHeader />
 
       <div id="canvas-container" />
 
@@ -42,17 +43,30 @@ export default function LandingPage() {
         <img
           src="/images/fallback_car.png"
           alt="BuildMyRide Car"
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
         />
       </div>
 
-      <HudHints />
-      <SwipeIndicators />
+      <Navbar />
+      <ProgressBar activeIndex={activeIndex} total={TOTAL_SECTIONS} />
 
-      <button id="btn-back" type="button">{"← EXTERIOR VIEW"}</button>
+      <div className="v-scroll">
+        <div
+          className="v-track"
+          style={{ transform: `translateY(-${activeIndex * 100}vh)` }}
+        >
+          <HeroSection isActive={activeIndex === 0} />
+          <FeaturesSection isActive={activeIndex === 1} />
+          <ARPreviewSection isActive={activeIndex === 2} />
+          <CTASection isActive={activeIndex === 3} />
+        </div>
+      </div>
 
-      <ScrollSections />
-
+      <button id="btn-back" type="button">
+        {"← EXTERIOR VIEW"}
+      </button>
       <div id="toast" />
     </div>
   );

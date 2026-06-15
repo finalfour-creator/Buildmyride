@@ -1,155 +1,99 @@
 "use client";
-import { Box, Container, Typography, Card, CardContent } from "@mui/material";
-import { motion } from "framer-motion";
+import { useRef, useEffect } from "react";
+import gsap from "gsap";
 
 const features = [
-  {
-    title: "3D Vehicle Customization",
-    description: "Modify body parts, paint colors, wheels, and accessories in real-time 3D environment.",
-    image: "/images/1.jpg",
-    specs: ["Real-time Rendering", "360° View", "Part Swapping"],
-  },
-  {
-    title: "AR Preview",
-    description: "Visualize modifications on your actual vehicle using your device camera.",
-    image: "/images/2.jpg",
-    specs: ["Live Camera View", "Overlay Technology", "Real-time Preview"],
-  },
-  {
-    title: "AI Design Assistant",
-    description: "Get intelligent suggestions for color combinations and part compatibility.",
-    image: "/images/4.jpg",
-    specs: ["Smart Recommendations", "Compatibility Check", "Style Guidance"],
-  },
-  {
-    title: "Save & Share Designs",
-    description: "Store your custom configurations and share them with the community.",
-    image: "/images/3.avif",
-    specs: ["Cloud Storage", "Easy Sharing", "Version History"],
-  },
+  { title: "Real-Time 3D Preview", desc: "Watch changes instantly as you customize" },
+  { title: "Save & Share Builds", desc: "Keep multiple configurations and share them" },
+  { title: "AR Visualization", desc: "Place your car in the real world using AR" },
+  { title: "Trending Designs", desc: "Explore what the community is building" },
 ];
 
-export default function FeaturesSection() {
-  return (
-    <Box sx={{ py: { xs: 6, md: 10 }, background: "#fefcf8" }}>
-      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 4, md: 6, lg: 8 } }}>
-        <Box sx={{ textAlign: "center", mb: { xs: 4, md: 6 } }}>
-          <Box sx={{ width: 50, height: 2, bgcolor: "#2c5364", mx: "auto", mb: 2 }} />
-          <Typography 
-            variant="h2" 
-            sx={{ 
-              fontSize: { xs: 28, sm: 36, md: 40 }, 
-              fontWeight: 500, 
-              color: "#1a2a32" 
-            }}
-          >
-            Designed for Excellence
-          </Typography>
-          <Typography 
-            variant="body1" 
-            sx={{ 
-              fontSize: { xs: 14, md: 16 }, 
-              color: "#6b7c88", 
-              mt: 2, 
-              maxWidth: 500, 
-              mx: "auto" 
-            }}
-          >
-            Powerful tools for automotive enthusiasts
-          </Typography>
-        </Box>
+export default function FeaturesSection({ isActive }) {
+  const ref = useRef(null);
 
-        {/* Single column layout - all cards stacked vertically */}
-        <Box sx={{ display: "flex", flexDirection: "column", gap: { xs: 3, md: 4 } }}>
-          {features.map((feature, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1, duration: 0.6 }}
-              viewport={{ once: true }}
-              style={{ width: "100%" }}
-            >
-              <Card
-                sx={{
-                  display: "flex",
-                  flexDirection: { xs: "column", md: index % 2 === 0 ? "row" : "row-reverse" },
-                  overflow: "hidden",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  width: "100%",
-                  height: { xs: "auto", md: 280 },
-                  "&:hover": { 
-                    transform: "scale(1.01)", 
-                    boxShadow: "0 20px 40px rgba(44,83,100,0.08)" 
-                  },
-                }}
-              >
-                <Box
-                  component="img"
-                  src={feature.image}
-                  alt={feature.title}
-                  sx={{
-                    width: { xs: "100%", md: "45%" },
-                    height: { xs: 200, md: 280 },
-                    objectFit: "cover",
-                  }}
-                />
-                <CardContent
-                  sx={{
-                    width: { xs: "100%", md: "55%" },
-                    p: { xs: 3, md: 4 },
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Box sx={{ width: 40, height: 2, bgcolor: "#2c5364", mb: 2 }} />
-                  <Typography 
-                    variant="h4" 
-                    sx={{ 
-                      fontSize: { xs: 20, md: 24 }, 
-                      fontWeight: 500, 
-                      color: "#1a2a32", 
-                      mb: 1.5 
-                    }}
-                  >
-                    {feature.title}
-                  </Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      fontSize: { xs: 13, md: 14 }, 
-                      color: "#6b7c88", 
-                      mb: 2, 
-                      lineHeight: 1.5 
-                    }}
-                  >
-                    {feature.description}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
-                    {feature.specs.map((spec, i) => (
-                      <Box
-                        key={i}
-                        sx={{
-                          px: { xs: 1.5, md: 2 },
-                          py: 0.5,
-                          bgcolor: "#f5f0ea",
-                          fontSize: { xs: 10, md: 11 },
-                          color: "#2c5364",
-                          fontWeight: 500,
-                        }}
-                      >
-                        {spec}
-                      </Box>
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+  useEffect(() => {
+    if (!isActive || !ref.current) return;
+    const el = ref.current;
+    const tl = gsap.timeline();
+
+    tl.fromTo(
+      el.querySelector(".section-tag"),
+      { x: -24, opacity: 0 },
+      { x: 0, opacity: 1, duration: 0.65, ease: "power4.out" }
+    );
+
+    tl.fromTo(
+      el.querySelectorAll(".section-title .line > span"),
+      { y: -70, skewY: -4, opacity: 0, filter: "blur(4px)" },
+      {
+        y: 0,
+        skewY: 0,
+        opacity: 1,
+        filter: "blur(0px)",
+        duration: 0.95,
+        stagger: 0.15,
+        ease: "power4.out",
+      },
+      "-=0.3"
+    );
+
+    tl.fromTo(
+      el.querySelector(".section-body"),
+      { y: 28, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.65, ease: "power4.out" },
+      "-=0.4"
+    );
+
+    tl.fromTo(
+      el.querySelectorAll(".feature-card"),
+      { scale: 0.55, y: 24, opacity: 0 },
+      {
+        scale: 1,
+        y: 0,
+        opacity: 1,
+        duration: 0.65,
+        stagger: 0.08,
+        ease: "back.out(1.4)",
+      },
+      "-=0.3"
+    );
+
+    return () => tl.kill();
+  }, [isActive]);
+
+  return (
+    <section ref={ref} className="v-section features-section">
+      <div className="chapter-num">01</div>
+      <div className="frame-mark tl" />
+      <div className="frame-mark br" />
+
+      <div className="features-content">
+        <div className="section-tag">
+          <span>Chapter 01 — The Platform</span>
+        </div>
+        <h2 className="section-title">
+          <span className="line">
+            <span>Born in</span>
+          </span>
+          <span className="line stroke">
+            <span>the studio.</span>
+          </span>
+        </h2>
+        <p className="section-body">
+          Every panel, every bolt, every detail — composed by you. From blank
+          canvas to finished machine in a seamless experience.
+        </p>
+
+        <div className="feature-grid">
+          {features.map((f) => (
+            <div key={f.title} className="feature-card">
+              <div className="feature-card-title">{f.title}</div>
+              <div className="feature-card-desc">{f.desc}</div>
+            </div>
           ))}
-        </Box>
-      </Container>
-    </Box>
+        </div>
+      </div>
+    </section>
   );
 }
-
