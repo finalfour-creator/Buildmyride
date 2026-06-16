@@ -1,10 +1,5 @@
-import dynamic from "next/dynamic";
-
-const LandingPage = dynamic(
-  () => import("@/feature/landing/components/LandingPage"),
-  { ssr: false }
-);
+import LandingWrapper from "./LandingWrapper";
 
 export default function Home() {
-  return <LandingPage />;
+  return <LandingWrapper />;
 }
