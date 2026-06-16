@@ -14,7 +14,7 @@ const mainNav = [
 ];
 
 const supportNav = [
-  { href: '/settings', label: 'Support', icon: '💬' }
+  { href: '/settings', label: 'Settings', icon: '⚙️' }
 ];
 
 function NavItem({ href, icon, label, badge, isActive }) {
@@ -251,7 +251,6 @@ export default function Sidebar() {
           }
         }}
       >
-        <MenuItem onClick={handleClose} component={Link} href="/profile">Profile</MenuItem>
         <MenuItem onClick={handleClose} component={Link} href="/settings">Settings</MenuItem>
         <MenuItem onClick={handleLogout}>Logout</MenuItem>
       </Menu>

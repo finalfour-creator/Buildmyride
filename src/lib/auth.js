@@ -5,6 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api").replace(/\/+$/, "");
 
 export const authOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Credentials",

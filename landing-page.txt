@@ -1,0 +1,188 @@
+LANDING PAGE CODE DOCUMENTATION
+================================
+Project: BuildMyRide
+File: src/feature/landing/components/LandingPage.jsx
+
+
+OVERVIEW
+--------
+The landing page is the first thing users see when they visit the site.
+It starts with a short intro animation, then reveals a full scrollable
+marketing page made up of several sections.
+
+Entry point: src/app/page.jsx  ->  renders <LandingPage>
+
+
+COMPONENT TREE
+--------------
+LandingPage
+  |-- IntroAnimation         (2.5s splash screen shown once on load)
+  |-- (after intro finishes)
+       |-- Navbar            (fixed top bar, always visible)
+       |-- main
+       |    |-- HeroSection
+       |    |-- StatsSection
+       |    |-- FeaturesSection
+       |    |-- FeaturedModelsSection
+       |    |-- PreviewSection
+       |    |-- CTASection
+       |-- Footer
+
+
+FILES AND THEIR JOBS
+--------------------
+
+LandingPage.jsx
+  Location : src/feature/landing/components/
+  Job      : Root controller. Holds one state value (showIntro).
+             While showIntro is true, only IntroAnimation is shown.
+             When IntroAnimation calls onComplete, showIntro becomes
+             false and the full page renders.
+             The <main> element has paddingTop: 70px to sit below the
+             fixed navbar.
+
+IntroAnimation.jsx
+  Location : src/feature/landing/components/
+  Job      : Fullscreen dark overlay that shows "BUILDMYRIDE" with a
+             short animated underline. Fades away after 2500ms.
+             Uses Framer Motion (AnimatePresence) for the exit animation.
+             Calls the onComplete prop 100ms after the fade starts.
+
+HeroSection.jsx
+  Location : src/feature/landing/components/
+  Job      : Full-viewport (100vh) hero section.
+             Background: Canvas particle system drawn with the browser
+             Canvas API inside a useEffect.
+               - Up to 800 moving particles, capped by screen size.
+               - Particles bounce off screen edges.
+               - Within 200px of the mouse they are repelled.
+               - Nearby particles are connected with faint lines.
+               - Background gradient: #0f2027 -> #203a43 -> #2c5364
+             Content (above canvas):
+               - "BUILDMYRIDE" badge chip with a Zap icon
+               - Main heading: "Build Your dream Ride"
+               - Subtitle describing the platform
+               - "Start Building" button -> /login
+               - Scroll indicator (thin line + "Scroll to explore" text)
+             All content animates in with Framer Motion, each item
+             staggering 150ms after the previous one.
+
+StatsSection.jsx
+  Location : src/feature/landing/components/
+  Job      : Shows four platform numbers in a row.
+               12+     Car Models
+               50+     Custom Parts
+               1000+   Active Users
+               24/7    Access
+             On mobile it collapses to a 2x2 grid.
+
+FeaturesSection.jsx
+  Location : src/feature/landing/components/
+  Job      : Four feature cards stacked vertically.
+             Each card has an image on one side and text on the other.
+             Cards alternate: image-left, image-right, image-left, etc.
+             Features shown:
+               1. 3D Vehicle Customization  (/images/1.jpg)
+               2. AR Preview                (/images/2.jpg)
+               3. AI Design Assistant       (/images/4.jpg)
+               4. Save & Share Designs      (/images/3.avif)
+             Each card fades up into view using Framer Motion
+             whileInView, staggered by 100ms per card.
+
+FeaturedModelsSection.jsx
+  Location : src/feature/landing/components/
+  Job      : The interactive 3D section.
+             Left panel (60% width): ThreeViewer component loads
+               /public/models/Honda-Civic.glb and renders it with
+               Three.js. Accepts a modelColor hex string that repaints
+               the body panels in real time.
+             Right panel (40% width): Eight color swatches. Clicking
+               one updates the modelColor state which ThreeViewer
+               picks up immediately.
+             Color options:
+               Midnight Blue, Matte Black, Crimson Red, Pearl White,
+               Sunset Orange, Forest Green, Steel Gray, Royal Blue.
+             "Start Full Customization" button -> /customize
+
+PreviewSection.jsx
+  Location : src/feature/landing/components/
+  Job      : Three equal boxes highlighting platform capabilities.
+               Color Selection  - Choose from premium finishes
+               Part Swapping    - Mix and match components
+               Live Preview     - See changes instantly
+             One column on mobile, three columns on desktop.
+
+CTASection.jsx
+  Location : src/feature/landing/components/
+  Job      : Final call-to-action block.
+             Heading: "Start Your Build Today"
+             "Get Started" button -> /login
+
+Navbar  (LandingNav.jsx)
+  Location : src/components/layout/
+  Job      : Fixed MUI AppBar, height 70px.
+             Dark background (#0f2027) with a teal bottom border.
+             Left side : "BUILDMYRIDE" wordmark, links to /
+             Right side: "Login" button -> /login
+
+Footer  (Footer.jsx)
+  Location : src/components/layout/
+  Job      : Four-column footer on a near-black background.
+             Columns: Brand tagline / Product / Company / Legal
+             Copyright line at the bottom.
+
+
+OTHER COMPONENTS (exist but not in main page flow)
+--------------------------------------------------
+
+CarGallerySection.jsx
+  A grid of three car cards with images from /images/.
+  Each card shows name, body type, year, and horsepower.
+  Can be added to LandingPage.jsx if a gallery section is needed.
+
+ScrollSections.jsx
+  Six scroll sections with a dark/neon style using CSS class names
+  (Orbitron font, teal accents). Covers Hero, Modules, Street
+  Performance, Feature Cars, Customization, and Test Drive booking.
+  Requires a separate landing.css stylesheet to look correct.
+
+
+STYLING APPROACH
+----------------
+Most sections use MUI sx props for all styling (no separate CSS file needed).
+HeroSection uses inline canvas drawing for the particle background.
+Framer Motion handles entrance animations.
+
+Brand colours:
+  #0f2027   Deep navy    - dark backgrounds, gradient start
+  #203a43   Mid teal     - gradient midpoint
+  #2c5364   Teal accent  - borders, dividers, buttons
+  #4a7c9c   Light teal   - hover states
+  #fefcf8   Off-white    - light section backgrounds
+  #f5f0ea   Warm white   - alternate section backgrounds
+
+
+DEPENDENCIES
+------------
+@mui/material   - All UI components (AppBar, Button, Card, Grid, etc.)
+framer-motion   - Splash animation, hero stagger, feature scroll reveal
+next/link       - Client-side navigation links
+three           - 3D rendering inside ThreeViewer
+lucide-react    - ArrowRight and Zap icons in HeroSection
+
+
+HOW IT ALL FITS TOGETHER
+------------------------
+1. User visits /
+2. page.jsx renders <LandingPage>
+3. showIntro = true, so <IntroAnimation> fills the screen
+4. After 2.5s IntroAnimation fades out and calls onComplete
+5. showIntro = false, full page mounts
+6. Navbar is fixed at the top (always visible when scrolling)
+7. HeroSection fills the first viewport
+8. User scrolls down through Stats -> Features -> 3D Model -> Preview -> CTA
+9. Footer is at the very bottom
+
+No API calls happen on the landing page.
+All content is static except the 3D model, which loads
+Honda-Civic.glb from /public/models/ through Three.js.

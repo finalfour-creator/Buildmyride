@@ -1,37 +1,38 @@
-
 "use client";
 import { useState } from "react";
 import { Box, Typography, Grid, TextField, Button, Paper } from "@mui/material";
 import { useSession } from "next-auth/react";
 
 const passwordItems = [
-  { label: "Current Password", name: "currentPassword", icon: "🔒", color: "#2c5364", type: "password" },
-  { label: "New Password", name: "newPassword", icon: "✨", color: "#203a43", type: "password" },
-  { label: "Confirm New Password", name: "confirmPassword", icon: "✓", color: "#2c5364", type: "password" },
+  { label: "Current Password", name: "currentPassword", type: "password" },
+  { label: "New Password",     name: "newPassword",     type: "password" },
+  { label: "Confirm Password", name: "confirmPassword", type: "password" },
 ];
 
-// ✅ PASSWORD VALIDATION FUNCTION (same as register)
 const validatePassword = (password) => {
   const errors = [];
-  
-  if (password.length < 8) {
-    errors.push("at least 8 characters");
-  }
-  if (!/[A-Z]/.test(password)) {
-    errors.push("1 uppercase letter (A-Z)");
-  }
-  if (!/[a-z]/.test(password)) {
-    errors.push("1 lowercase letter (a-z)");
-  }
-  if (!/[0-9]/.test(password)) {
-    errors.push("1 number (0-9)");
-  }
-  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    errors.push("1 special character (!@#$%^&*)");
-  }
-  
+  if (password.length < 8)                          errors.push("at least 8 characters");
+  if (!/[A-Z]/.test(password))                      errors.push("1 uppercase letter (A-Z)");
+  if (!/[a-z]/.test(password))                      errors.push("1 lowercase letter (a-z)");
+  if (!/[0-9]/.test(password))                      errors.push("1 number (0-9)");
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password))    errors.push("1 special character (!@#$%^&*)");
   return errors;
 };
+
+const field = (hasError) => ({
+  "& .MuiOutlinedInput-root": {
+    background: "rgba(255,255,255,0.04)",
+    borderRadius: "8px",
+    "& fieldset": { borderColor: hasError ? "rgba(220,38,38,0.5)" : "rgba(255,255,255,0.08)" },
+    "&:hover fieldset": { borderColor: hasError ? "rgba(220,38,38,0.7)" : "rgba(44,83,100,0.6)" },
+    "&.Mui-focused fieldset": { borderColor: hasError ? "#dc2626" : "#2c5364", borderWidth: "1.5px" },
+  },
+  "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.3)", fontSize: 13 },
+  "& .MuiInputLabel-root.Mui-focused": { color: hasError ? "#f87171" : "#4a9cb8" },
+  "& .MuiOutlinedInput-input": { color: "#e8eaf6", fontSize: 13 },
+  "& .MuiFormHelperText-root": { color: "#f87171", fontSize: 11, ml: 0, mt: 0.5 },
+  "& .MuiOutlinedInput-input.Mui-disabled": { WebkitTextFillColor: "rgba(255,255,255,0.2)" },
+});
 
 export default function PasswordSettings({ showMessage }) {
   const { data: session } = useSession();
@@ -49,99 +50,50 @@ export default function PasswordSettings({ showMessage }) {
     const { name, value } = e.target;
     setPasswordData({ ...passwordData, [name]: value });
 
-    // Clear error when typing
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
-    }
+    if (errors[name]) setErrors({ ...errors, [name]: "" });
 
-    // ✅ Validate new password strength in real-time
     if (name === "newPassword") {
       const strengthErrors = validatePassword(value);
-      if (value.length > 0 && strengthErrors.length > 0) {
-        setPasswordStrengthError(`Password must contain: ${strengthErrors.join(", ")}`);
-      } else {
-        setPasswordStrengthError("");
-      }
+      setPasswordStrengthError(value.length > 0 && strengthErrors.length > 0 ? `Must contain: ${strengthErrors.join(", ")}` : "");
     }
-
-    // Clear confirm password error when new password or confirm changes
-    if (name === "newPassword" || name === "confirmPassword") {
-      if (errors.confirmPassword) {
-        setErrors({ ...errors, confirmPassword: "" });
-      }
+    if ((name === "newPassword" || name === "confirmPassword") && errors.confirmPassword) {
+      setErrors({ ...errors, confirmPassword: "" });
     }
   };
 
   const validate = () => {
     const newErrors = {};
-
-    if (!passwordData.currentPassword) {
-      newErrors.currentPassword = "Current password is required";
-    }
-
+    if (!passwordData.currentPassword) newErrors.currentPassword = "Current password is required";
     if (!passwordData.newPassword) {
       newErrors.newPassword = "New password is required";
     } else {
-      // ✅ CHECK PASSWORD STRENGTH
       const strengthErrors = validatePassword(passwordData.newPassword);
-      if (strengthErrors.length > 0) {
-        newErrors.newPassword = `Password must contain: ${strengthErrors.join(", ")}`;
-      }
+      if (strengthErrors.length > 0) newErrors.newPassword = `Must contain: ${strengthErrors.join(", ")}`;
     }
-
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
+    if (passwordData.newPassword !== passwordData.confirmPassword) newErrors.confirmPassword = "Passwords do not match";
     return newErrors;
   };
 
   const handleSubmit = async () => {
-    // Clear previous password strength error
     setPasswordStrengthError("");
-    
     const newErrors = validate();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     setLoading(true);
-
     try {
       const response = await fetch("http://localhost:5000/api/users/update-password", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.accessToken}`,
-        },
-        body: JSON.stringify({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword,
-        }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.accessToken}` },
+        body: JSON.stringify({ currentPassword: passwordData.currentPassword, newPassword: passwordData.newPassword }),
       });
 
       let data;
-      try {
-        data = await response.json();
-      } catch {
-        data = { message: "Server returned invalid response" };
-      }
+      try { data = await response.json(); } catch { data = { message: "Server returned invalid response" }; }
+      if (!response.ok) throw new Error(data.message || "Failed to update password");
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to update password");
-      }
-
-      // Reset form on success
-      setPasswordData({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setPasswordStrengthError("");
-
       showMessage("Password updated successfully");
-
     } catch (error) {
       showMessage(error.message || "Update failed");
     } finally {
@@ -150,88 +102,74 @@ export default function PasswordSettings({ showMessage }) {
   };
 
   return (
-    <Paper sx={{ mb: 4, width: "100%" }}>
-      <Box sx={{ background: "linear-gradient(135deg, #203a43, #2c5364)", p: 2, textAlign: "center" }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: "#ffffff" }}>
+    <Paper sx={{ width: "100%", height: "100%", background: "#0d1b2a", border: "1px solid rgba(44,83,100,0.25)", borderRadius: "12px", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.4)" }}>
+      {/* Header */}
+      <Box sx={{ px: 3, pt: 2.5, pb: 2, borderBottom: "1px solid rgba(44,83,100,0.15)" }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#4a9cb8", letterSpacing: "0.02em" }}>
           Change Password
+        </Typography>
+        <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.3)", mt: 0.3 }}>
+          Choose a strong password to keep your account secure
         </Typography>
       </Box>
 
+      {/* Fields — current+new on top row, confirm below */}
       <Box sx={{ p: 3 }}>
         <Grid container spacing={2}>
-          {passwordItems.map((item, index) => (
-            <Grid item xs={12} key={index}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  p: 1.5,
-                  bgcolor: index % 2 === 0 ? "#f8fafc" : "#ffffff",
-                  borderRadius: 1,
-                  border: "1px solid #e8e0d6",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "50%",
-                    background: `linear-gradient(135deg, ${item.color}, ${item.color}cc)`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 20,
-                  }}
-                >
-                  {item.icon}
-                </Box>
+          {/* Row 1: current password + new password */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth label={passwordItems[0].label} name={passwordItems[0].name}
+              type={passwordItems[0].type} value={passwordData[passwordItems[0].name]}
+              onChange={handleChange} error={!!errors[passwordItems[0].name]}
+              helperText={errors[passwordItems[0].name]}
+              variant="outlined" size="small" disabled={loading}
+              sx={field(!!errors[passwordItems[0].name])}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth label={passwordItems[1].label} name={passwordItems[1].name}
+              type={passwordItems[1].type} value={passwordData[passwordItems[1].name]}
+              onChange={handleChange} error={!!errors[passwordItems[1].name]}
+              helperText={errors[passwordItems[1].name] || passwordStrengthError}
+              variant="outlined" size="small" disabled={loading}
+              sx={field(!!errors[passwordItems[1].name])}
+            />
+          </Grid>
 
-                <Box sx={{ flex: 1 }}>
-                  <TextField
-                    fullWidth
-                    label={item.label}
-                    name={item.name}
-                    type={item.type}
-                    value={passwordData[item.name]}
-                    onChange={handleChange}
-                    error={!!errors[item.name]}
-                    helperText={
-                      errors[item.name] ||
-                      (item.name === "newPassword" && passwordStrengthError)
-                    }
-                    variant="outlined"
-                    size="small"
-                    disabled={loading}
-                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 1 } }}
-                  />
-                </Box>
-              </Box>
-            </Grid>
-          ))}
+          {/* Row 2: confirm password */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth label={passwordItems[2].label} name={passwordItems[2].name}
+              type={passwordItems[2].type} value={passwordData[passwordItems[2].name]}
+              onChange={handleChange} error={!!errors[passwordItems[2].name]}
+              helperText={errors[passwordItems[2].name]}
+              variant="outlined" size="small" disabled={loading}
+              sx={field(!!errors[passwordItems[2].name])}
+            />
+          </Grid>
         </Grid>
 
-        {/* ✅ Password Requirements Hint */}
-        <Box sx={{ mt: 2, mb: 2, p: 1.5, bgcolor: "#f0f4f8", borderRadius: 1 }}>
-          <Typography variant="caption" sx={{ color: "#64748b" }}>
-            <strong>Password requirements:</strong> Minimum 8 characters, at least 1 uppercase letter, 
-            1 lowercase letter, 1 number, and 1 special character (!@#$%^&*)
-          </Typography>
-        </Box>
+        {/* Requirements */}
+        <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.25)", mt: 2, letterSpacing: "0.01em" }}>
+          Requirements: Minimum 8 characters · 1 uppercase · 1 lowercase · 1 number · 1 special character
+        </Typography>
 
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2.5 }}>
           <Button
             variant="contained"
             onClick={handleSubmit}
             disabled={loading}
             sx={{
               background: "linear-gradient(135deg, #0f2027, #2c5364)",
-              borderRadius: 2,
-              textTransform: "none",
-              px: 4,
+              borderRadius: "8px", textTransform: "none", px: 3, py: 0.9,
+              fontSize: 13, fontWeight: 600, boxShadow: "none",
+              "&:hover": { boxShadow: "0 4px 16px rgba(44,83,100,0.5)", opacity: 0.9 },
+              "&.Mui-disabled": { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.2)" },
             }}
           >
-            {loading ? "Updating..." : "Update Password"}
+            {loading ? "Updating…" : "Update Password"}
           </Button>
         </Box>
       </Box>
