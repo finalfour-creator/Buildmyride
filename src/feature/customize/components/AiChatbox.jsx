@@ -1,10 +1,15 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Box, Typography, IconButton, TextField, Button, Paper } from "@mui/material";
+import apiClient from "@/lib/axios";
 
-export default function AiChatbox({ isOpen, onClose }) {
+export default function AiChatbox({ isOpen, onClose, carName, buildContext }) {
   const [messages, setMessages] = useState([
-    { type: "assistant", content: "Hello! I'm your AI design assistant. Ask me about color combinations, part compatibility, or styling suggestions." }
+    {
+      type: "assistant",
+      content:
+        "Hello! I'm your AI design assistant. Ask me about color combinations, part compatibility, or styling suggestions for your build.",
+    },
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -14,31 +19,35 @@ export default function AiChatbox({ isOpen, onClose }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const generateResponse = (userMessage) => {
-    const lowerMsg = userMessage.toLowerCase();
-    if (lowerMsg.includes("color")) {
-      return "For your Honda Civic, Midnight Blue or Gunmetal Gray would complement the lines well. Matte finishes are trending but require more maintenance.";
-    }
-    if (lowerMsg.includes("rim") || lowerMsg.includes("wheel")) {
-      return "18-inch alloy wheels with a matte black finish would create a cohesive look. Forged options reduce weight and improve handling.";
-    }
-    if (lowerMsg.includes("compatible")) {
-      return "All selected parts are compatible with the 2024 Honda Civic. The aftermarket support for this platform is extensive.";
-    }
-    return "I understand you're asking about that. Could you provide more details about your specific build? I can help with colors, parts, compatibility, or design suggestions.";
-  };
+  const handleSend = async () => {
+    if (!inputValue.trim() || isTyping) return;
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
     const userMessage = { type: "user", content: inputValue };
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
+    const sentMessage = inputValue;
     setInputValue("");
     setIsTyping(true);
-    setTimeout(() => {
-      const response = generateResponse(inputValue);
-      setMessages(prev => [...prev, { type: "assistant", content: response }]);
+
+    try {
+      const res = await apiClient.post("/ai/suggest", {
+        message: sentMessage,
+        context: { carName, ...buildContext },
+      });
+      setMessages((prev) => [
+        ...prev,
+        { type: "assistant", content: res.data.reply },
+      ]);
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.error ||
+        "Something went wrong. Please try again.";
+      setMessages((prev) => [
+        ...prev,
+        { type: "assistant", content: errorMsg },
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 600);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -52,12 +61,40 @@ export default function AiChatbox({ isOpen, onClose }) {
 
   return (
     <Box sx={{ position: "fixed", bottom: 24, right: 24, zIndex: 2000 }}>
-      <Paper elevation={8} sx={{ width: 380, height: 520, display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #e8e0d6" }}>
+      <Paper
+        elevation={8}
+        sx={{
+          width: 380,
+          height: 520,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          border: "1px solid #e8e0d6",
+        }}
+      >
         {/* Header */}
-        <Box sx={{ p: 2, background: "linear-gradient(135deg, #0f2027, #2c5364)", display: "flex", justifyContent: "space-between", alignItems: "center", color: "white" }}>
+        <Box
+          sx={{
+            p: 2,
+            background: "linear-gradient(135deg, #0f2027, #2c5364)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            color: "white",
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <span style={{ fontSize: 20 }}>🤖</span>
-            <Typography sx={{ fontWeight: 600, fontSize: 14 }}>AI Design Assistant</Typography>
+            <Box>
+              <Typography sx={{ fontWeight: 600, fontSize: 14, lineHeight: 1.2 }}>
+                AI Design Assistant
+              </Typography>
+              {carName && (
+                <Typography sx={{ fontSize: 11, opacity: 0.65, lineHeight: 1 }}>
+                  {carName}
+                </Typography>
+              )}
+            </Box>
           </Box>
           <IconButton onClick={onClose} sx={{ color: "white", fontSize: 20 }} size="small">
             ✕
@@ -67,14 +104,26 @@ export default function AiChatbox({ isOpen, onClose }) {
         {/* Messages */}
         <Box sx={{ flex: 1, overflowY: "auto", p: 2, background: "#fefcf8" }}>
           {messages.map((msg, idx) => (
-            <Box key={idx} sx={{ mb: 2, display: "flex", justifyContent: msg.type === "user" ? "flex-end" : "flex-start" }}>
-              <Paper sx={{
-                maxWidth: "80%",
-                p: 1.5,
-                background: msg.type === "user" ? "linear-gradient(135deg, #0f2027, #2c5364)" : "#f0ece4",
-                color: msg.type === "user" ? "white" : "#1a2a32",
-                fontSize: 13,
-              }}>
+            <Box
+              key={idx}
+              sx={{
+                mb: 2,
+                display: "flex",
+                justifyContent: msg.type === "user" ? "flex-end" : "flex-start",
+              }}
+            >
+              <Paper
+                sx={{
+                  maxWidth: "80%",
+                  p: 1.5,
+                  background:
+                    msg.type === "user"
+                      ? "linear-gradient(135deg, #0f2027, #2c5364)"
+                      : "#f0ece4",
+                  color: msg.type === "user" ? "white" : "#1a2a32",
+                  fontSize: 13,
+                }}
+              >
                 {msg.content}
               </Paper>
             </Box>
@@ -92,7 +141,15 @@ export default function AiChatbox({ isOpen, onClose }) {
         </Box>
 
         {/* Input */}
-        <Box sx={{ p: 2, borderTop: "1px solid #e8e0d6", display: "flex", gap: 1, background: "white" }}>
+        <Box
+          sx={{
+            p: 2,
+            borderTop: "1px solid #e8e0d6",
+            display: "flex",
+            gap: 1,
+            background: "white",
+          }}
+        >
           <TextField
             fullWidth
             size="small"
@@ -101,12 +158,13 @@ export default function AiChatbox({ isOpen, onClose }) {
             onKeyPress={handleKeyPress}
             placeholder="Ask about colors, parts, compatibility..."
             variant="outlined"
+            disabled={isTyping}
             sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0 } }}
           />
           <Button
             onClick={handleSend}
             variant="contained"
-            disabled={!inputValue.trim()}
+            disabled={!inputValue.trim() || isTyping}
             sx={{
               background: "linear-gradient(135deg, #0f2027, #2c5364)",
               borderRadius: 0,
@@ -121,10 +179,17 @@ export default function AiChatbox({ isOpen, onClose }) {
 
       <style jsx>{`
         @keyframes pulse {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 1; }
+          0%,
+          100% {
+            opacity: 0.3;
+          }
+          50% {
+            opacity: 1;
+          }
         }
-        span { display: inline-block; }
+        span {
+          display: inline-block;
+        }
       `}</style>
     </Box>
   );
