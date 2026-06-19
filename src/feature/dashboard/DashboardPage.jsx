@@ -10,7 +10,7 @@ import { useSearchParams } from "next/navigation";
 import gsap from "gsap";
 
 const quickActions = [
-  { href: "/configurator/customization", title: "New Design", desc: "Create a custom vehicle configuration" },
+  { href: "/configurator/selection", title: "New Design", desc: "Create a custom vehicle configuration" },
   { href: "/ar-view", title: "AR Preview", desc: "Visualize modifications on your vehicle" },
   { href: "/ai-assistant", title: "AI Assistant", desc: "Get intelligent design recommendations" },
 ];
@@ -64,6 +64,7 @@ export default function DashboardPage() {
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
+  const [modelUrlMap, setModelUrlMap] = useState({});
 
   const pageRef = useRef(null);
   const welcomeRef = useRef(null);
@@ -96,65 +97,81 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === "authenticated") {
       fetchDesigns();
+      apiClient.get("/models").then((res) => {
+        const map = {};
+        const arr = Array.isArray(res.data) ? res.data : [];
+        arr.forEach((m) => { map[m._id] = m.chassisUrl || m.modelUrl; });
+        setModelUrlMap(map);
+      }).catch(() => {});
     } else if (status === "unauthenticated") {
       setLoading(false);
     }
   }, [status, fetchDesigns]);
 
-  // GSAP entry animations
+  // Phase 1: animate static sections as soon as session is ready
   useEffect(() => {
-    if (loading || status !== "authenticated" || !pageRef.current) return;
-
+    if (status !== "authenticated" || !pageRef.current) return;
     const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ defaults: { ease: "power4.out" } });
-
-      tl.fromTo(welcomeRef.current, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7 });
-
-      tl.fromTo(
+      gsap.fromTo(welcomeRef.current, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power4.out" });
+      gsap.fromTo(
         quickActionsRef.current?.querySelectorAll(".quick-action-card"),
         { scale: 0.55, y: 24, opacity: 0 },
-        { scale: 1, y: 0, opacity: 1, duration: 0.65, stagger: 0.08, ease: "back.out(1.4)" },
-        "-=0.3"
+        { scale: 1, y: 0, opacity: 1, duration: 0.65, stagger: 0.08, ease: "back.out(1.4)", delay: 0.3 }
       );
-
-      tl.fromTo(tabBarRef.current, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, "-=0.2");
-      tl.fromTo(contentRef.current, { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, "-=0.2");
-      tl.fromTo(statsRef.current, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, "-=0.2");
-
-      // Count-up animation for stat numbers
-      const counters = statsRef.current?.querySelectorAll(".stat-value");
-      counters?.forEach((counter) => {
-        const target = parseFloat(counter.dataset.target) || 0;
-        const isDecimal = counter.dataset.decimal === "true";
-        counter.textContent = "0";
-        const obj = { val: 0 };
-        gsap.to(obj, {
-          val: target,
-          duration: 1.5,
-          delay: 0.8,
-          ease: "power2.out",
-          onUpdate: () => {
-            counter.textContent = isDecimal
-              ? obj.val.toFixed(1)
-              : Math.floor(obj.val).toLocaleString();
-          },
-        });
-      });
     }, pageRef);
-
     return () => ctx.revert();
+  }, [status]);
+
+  // Phase 2: animate tab/content immediately, stats after loading
+  useEffect(() => {
+    if (status !== "authenticated" || !pageRef.current) return;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: "power4.out" }, delay: 0.5 });
+      tl.fromTo(tabBarRef.current, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 });
+      tl.fromTo(contentRef.current, { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, "-=0.2");
+      if (!loading) tl.fromTo(statsRef.current, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, "-=0.2");
+
+      if (!loading) {
+        const counters = statsRef.current?.querySelectorAll(".stat-value");
+        counters?.forEach((counter) => {
+          const target = parseFloat(counter.dataset.target) || 0;
+          const isDecimal = counter.dataset.decimal === "true";
+          counter.textContent = "0";
+          const obj = { val: 0 };
+          gsap.to(obj, {
+            val: target,
+            duration: 1.5,
+            delay: 0.8,
+            ease: "power2.out",
+            onUpdate: () => {
+              counter.textContent = isDecimal
+                ? obj.val.toFixed(1)
+                : Math.floor(obj.val).toLocaleString();
+            },
+          });
+        });
+      }
+    }, pageRef);
+    return () => ctx.revert();
+  }, [status]);
+
+  // Phase 3: animate stats + count-up once designs are loaded
+  useEffect(() => {
+    if (loading || status !== "authenticated" || !statsRef.current) return;
+    gsap.fromTo(statsRef.current, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power4.out", delay: 0.2 });
+    statsRef.current.querySelectorAll(".stat-value").forEach((counter) => {
+      const target = parseFloat(counter.dataset.target) || 0;
+      const isDecimal = counter.dataset.decimal === "true";
+      counter.textContent = "0";
+      const obj = { val: 0 };
+      gsap.to(obj, {
+        val: target, duration: 1.5, delay: 0.6, ease: "power2.out",
+        onUpdate: () => { counter.textContent = isDecimal ? obj.val.toFixed(1) : Math.floor(obj.val).toLocaleString(); },
+      });
+    });
   }, [loading, status]);
 
   const userName = session?.user?.name || "User";
-
-  // Skeleton loading state
-  if (status === "loading" || (status === "authenticated" && loading)) {
-    return (
-      <Box sx={{ minHeight: "100vh", background: "#f0f4f8" }}>
-        <DashboardSkeleton />
-      </Box>
-    );
-  }
 
   const stats = [
     { label: "Total Designs", value: designs.length.toString() },
@@ -260,7 +277,7 @@ export default function DashboardPage() {
             mb: 4, opacity: 0,
           }}
         >
-          {["designs", "activity"].map((tab) => (
+          {["designs"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -270,92 +287,54 @@ export default function DashboardPage() {
                 fontFamily: "'Orbitron', sans-serif",
                 fontSize: 11, fontWeight: 700,
                 letterSpacing: "0.15em", textTransform: "uppercase",
-                color: activeTab === tab ? "#2c5364" : "#94a3b8",
-                borderBottom: activeTab === tab ? "2px solid #2c5364" : "2px solid transparent",
+                color: "#2c5364",
+                borderBottom: "2px solid #2c5364",
                 transition: "all 0.3s ease",
               }}
             >
-              {tab === "designs" ? "My Designs" : "Recent Activity"}
+              My Designs
             </button>
           ))}
         </Box>
 
         {/* Content */}
         <Box ref={contentRef} sx={{ opacity: 0 }}>
-          {activeTab === "designs" && (
-            <Box>
-              {fetchError ? (
-                <Box sx={{
-                  textAlign: "center", py: 10,
-                  background: "#fff", borderRadius: 3,
-                  border: "1px solid rgba(220, 38, 38, 0.2)",
-                  boxShadow: "0 2px 12px rgba(220, 38, 38, 0.06)",
-                }}>
-                  <Typography sx={{ color: "#dc2626", mb: 2, fontFamily: "'Outfit', sans-serif" }}>{fetchError}</Typography>
-                  <Button onClick={fetchDesigns} variant="contained" sx={{
-                    background: "linear-gradient(135deg, #0f2027, #2c5364)",
-                    borderRadius: 2,
-                    fontFamily: "'Orbitron', sans-serif",
-                    fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
-                    "&:hover": { boxShadow: "0 4px 20px rgba(44, 83, 100, 0.3)" },
-                  }}>
-                    Retry
-                  </Button>
+          {loading ? (
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 3 }}>
+              {[0, 1, 2].map((i) => (
+                <Box key={i} sx={{ borderRadius: 3, overflow: "hidden", bgcolor: "white", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+                  <Skeleton variant="rectangular" height={140} sx={{ bgcolor: "rgba(44,83,100,0.08)" }} animation="wave" />
+                  <Box sx={{ p: 2 }}>
+                    <Skeleton variant="rounded" width="60%" height={16} sx={{ borderRadius: 1, mb: 1, bgcolor: "rgba(0,0,0,0.06)" }} animation="wave" />
+                    <Skeleton variant="rounded" width="40%" height={12} sx={{ borderRadius: 1, bgcolor: "rgba(0,0,0,0.04)" }} animation="wave" />
+                  </Box>
                 </Box>
-              ) : designs.length > 0 ? (
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 3 }}>
-                  {designs.map((design) => (
-                    <DesignCard key={design._id} {...design} />
-                  ))}
-                </Box>
-              ) : (
-                <Box sx={{
-                  textAlign: "center", py: 10,
-                  background: "#ffffff",
-                  border: "1px solid rgba(0, 0, 0, 0.06)",
-                  borderRadius: 3,
-                  boxShadow: "0 2px 12px rgba(0, 0, 0, 0.06)",
-                }}>
-                  <h3 style={{
-                    fontSize: 18, fontWeight: 700,
-                    fontFamily: "'Orbitron', sans-serif",
-                    color: "#1a2a32", letterSpacing: "0.05em", marginBottom: 8,
-                  }}>
-                    No designs yet
-                  </h3>
-                  <p style={{
-                    color: "#64748b",
-                    fontFamily: "'Outfit', sans-serif", fontSize: 14, marginBottom: 24,
-                  }}>
-                    Start customizing your first vehicle design
-                  </p>
-                  <Link href="/configurator/customization" style={{
-                    padding: "14px 36px",
-                    background: "linear-gradient(135deg, #0f2027, #2c5364)",
-                    color: "#ffffff", textDecoration: "none", fontWeight: 700,
-                    fontFamily: "'Orbitron', sans-serif", fontSize: 11,
-                    letterSpacing: "0.1em", textTransform: "uppercase",
-                    borderRadius: 8,
-                    display: "inline-block",
-                  }}>
-                    Create New Design
-                  </Link>
-                </Box>
-              )}
+              ))}
             </Box>
-          )}
-
-          {activeTab === "activity" && (
-            <Box sx={{
-              background: "#ffffff",
-              border: "1px solid rgba(0, 0, 0, 0.06)",
-              borderRadius: 3,
-              boxShadow: "0 2px 12px rgba(0, 0, 0, 0.06)",
-              p: 4, textAlign: "center",
-            }}>
-              <p style={{ color: "#64748b", fontFamily: "'Outfit', sans-serif" }}>
-                Recent activity will appear here as you work on your designs.
+          ) : fetchError ? (
+            <Box sx={{ textAlign: "center", py: 10, background: "#fff", borderRadius: 3, border: "1px solid rgba(220,38,38,0.2)" }}>
+              <Typography sx={{ color: "#dc2626", mb: 2, fontFamily: "'Outfit', sans-serif" }}>{fetchError}</Typography>
+              <Button onClick={fetchDesigns} variant="contained" sx={{ background: "linear-gradient(135deg, #0f2027, #2c5364)", borderRadius: 2, fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em" }}>
+                Retry
+              </Button>
+            </Box>
+          ) : designs.length > 0 ? (
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 3 }}>
+              {designs.map((design) => (
+                <DesignCard key={design._id} {...design} />
+              ))}
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: "center", py: 10, background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 3, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', sans-serif", color: "#1a2a32", letterSpacing: "0.05em", marginBottom: 8 }}>
+                No designs yet
+              </h3>
+              <p style={{ color: "#64748b", fontFamily: "'Outfit', sans-serif", fontSize: 14, marginBottom: 24 }}>
+                Start customizing your first vehicle design
               </p>
+              <Link href="/configurator/selection" style={{ padding: "14px 36px", background: "linear-gradient(135deg, #0f2027, #2c5364)", color: "#ffffff", textDecoration: "none", fontWeight: 700, fontFamily: "'Orbitron', sans-serif", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", borderRadius: 8, display: "inline-block" }}>
+                Create New Design
+              </Link>
             </Box>
           )}
         </Box>

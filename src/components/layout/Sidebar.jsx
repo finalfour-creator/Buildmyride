@@ -7,7 +7,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { Box, Menu, MenuItem, Avatar, Typography } from '@mui/material';
 
 const mainNav = [
-  { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
+  { href: '/configurator/dashboard', label: 'Dashboard', icon: '⊞' },
   { href: '/configurator/designs', label: 'My Designs', badge: '7', icon: '🗂' },
   { href: '/configurator/customization', label: '3D Studio', icon: '🚗' },
   { href: '/ar-view', label: 'AR Preview', icon: '📷' },
@@ -201,32 +201,6 @@ export default function Sidebar() {
           </Typography>
         </Box>
 
-        {/* Diagnostic Summary pill */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "14px",
-          padding: "10px 14px",
-          background: "rgba(255, 126, 0, 0.1)",
-          borderRadius: "30px",
-          border: "1px solid rgba(255, 126, 0, 0.2)",
-          cursor: "pointer",
-          transition: "all 0.2s"
-        }}>
-          <span style={{ fontSize: 14, color: "#ff7e00" }}>⚠️</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0" }}>Diagnostics</span>
-          <span style={{ 
-            marginLeft: "auto", 
-            background: "#ff7e00", 
-            padding: "2px 8px", 
-            fontSize: 10, 
-            borderRadius: 12, 
-            color: "black",
-            fontWeight: 800
-          }}>
-            2
-          </span>
-        </div>
       </div>
 
       {/* Profile Dropdown Menu */}

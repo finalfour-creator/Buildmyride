@@ -1,8 +1,8 @@
 "use client";
-
 import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
 
-export default function Input({ label, type = "text", value, onChange, error = false, helperText = "", registration }) {
+export default function Input({ label, type = "text", value, onChange, error = false, helperText = "", registration, endAdornment }) {
   return (
     <TextField
       label={label}
@@ -14,6 +14,7 @@ export default function Input({ label, type = "text", value, onChange, error = f
       fullWidth
       variant="outlined"
       {...registration}
+      slotProps={endAdornment ? { input: { endAdornment: <InputAdornment position="end">{endAdornment}</InputAdornment> } } : undefined}
       sx={{
         mb: 2,
         "& .MuiOutlinedInput-root": {
@@ -28,11 +29,7 @@ export default function Input({ label, type = "text", value, onChange, error = f
         "& .MuiInputLabel-root": { color: "#aaa", fontSize: 13 },
         "& .MuiInputLabel-root.Mui-focused": { color: "#22a7f0" },
         "& .MuiOutlinedInput-root.Mui-error fieldset": { borderColor: "#f44336" },
-        "& .MuiFormHelperText-root": {
-          color: "#f44336",
-          fontSize: 11,
-          ml: 0,
-        },
+        "& .MuiFormHelperText-root": { color: "#f44336", fontSize: 11, ml: 0 },
       }}
     />
   );

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Box, Typography, Container, Breadcrumbs, Button, CircularProgress,
+  Box, Typography, Container, Breadcrumbs, Button, Skeleton,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Snackbar, Alert,
 } from "@mui/material";
@@ -16,6 +16,7 @@ export default function MyDesignsPage() {
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
+  const [modelUrlMap, setModelUrlMap] = useState({});
 
   // Selection state
   const [selectMode, setSelectMode] = useState(false);
@@ -49,8 +50,16 @@ export default function MyDesignsPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated") fetchDesigns();
-    else if (status === "unauthenticated") setLoading(false);
+    if (status === "authenticated") {
+      fetchDesigns();
+      apiClient.get("/models").then((res) => {
+        const map = {};
+        (Array.isArray(res.data) ? res.data : []).forEach((m) => { map[m._id] = m.chassisUrl || m.modelUrl; });
+        setModelUrlMap(map);
+      }).catch(() => {});
+    } else if (status === "unauthenticated") {
+      setLoading(false);
+    }
   }, [status, fetchDesigns]);
 
   /* ── Selection helpers ──────────────────────────── */
@@ -119,10 +128,25 @@ export default function MyDesignsPage() {
   /* ── Render guards ──────────────────────────────── */
   if (status === "loading" || (status === "authenticated" && loading)) {
     return (
-      <Container sx={{ py: 10, textAlign: "center" }}>
-        <CircularProgress size={32} sx={{ color: "#2c5364" }} />
-        <Typography variant="h6" sx={{ mt: 2 }}>Loading your saved designs…</Typography>
-      </Container>
+      <Box sx={{ minHeight: "100vh", background: "#f0f4f8" }}>
+        <Container maxWidth="xl" sx={{ py: 4 }}>
+          {/* Header skeleton */}
+          <Skeleton variant="rounded" height={120} sx={{ borderRadius: 3, mb: 5, bgcolor: "rgba(44,83,100,0.12)" }} animation="wave" />
+          <Skeleton variant="rounded" width={140} height={12} sx={{ borderRadius: 1, mb: 3, bgcolor: "rgba(0,0,0,0.06)" }} animation="wave" />
+          {/* Card grid skeleton */}
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 3 }}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Box key={i} sx={{ borderRadius: 3, overflow: "hidden", bgcolor: "white", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+                <Skeleton variant="rectangular" height={160} sx={{ bgcolor: "rgba(44,83,100,0.08)" }} animation="wave" />
+                <Box sx={{ p: 2 }}>
+                  <Skeleton variant="rounded" width="65%" height={16} sx={{ borderRadius: 1, mb: 1.5, bgcolor: "rgba(0,0,0,0.06)" }} animation="wave" />
+                  <Skeleton variant="rounded" width="45%" height={11} sx={{ borderRadius: 1, bgcolor: "rgba(0,0,0,0.04)" }} animation="wave" />
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Container>
+      </Box>
     );
   }
 
@@ -140,18 +164,32 @@ export default function MyDesignsPage() {
   const allSelected = designs.length > 0 && selectedIds.size === designs.length;
 
   return (
+    <Box sx={{ minHeight: "100vh", background: "#f0f4f8" }}>
     <Container maxWidth="xl" sx={{ py: 4 }}>
 
-      {/* ── Header ── */}
-      <Box sx={{ mb: 3 }}>
-        <Breadcrumbs sx={{ mb: 1, fontSize: 13 }}>
-          <Link href="/configurator/dashboard" style={{ textDecoration: "none", color: "#64748b" }}>Dashboard</Link>
-          <Typography sx={{ fontSize: 13, color: "#1a2a32", fontWeight: 600 }}>My Designs</Typography>
-        </Breadcrumbs>
-        <Box sx={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+      {/* ── Header Banner ── */}
+      <Box sx={{
+        background: "linear-gradient(135deg, #0f2027, #203a43, #2c5364)",
+        borderRadius: 3,
+        p: { xs: 3, md: 4 },
+        mb: 5,
+        position: "relative",
+        overflow: "hidden",
+        boxShadow: "0 4px 24px rgba(15,32,39,0.25)",
+      }}>
+        <Box sx={{ position: "absolute", top: 0, left: 0, width: 24, height: 24, borderTop: "1px solid rgba(0,242,254,0.4)", borderLeft: "1px solid rgba(0,242,254,0.4)", borderRadius: "12px 0 0 0" }} />
+        <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderBottom: "1px solid rgba(0,242,254,0.4)", borderRight: "1px solid rgba(0,242,254,0.4)", borderRadius: "0 0 12px 0" }} />
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, position: "relative", zIndex: 1 }}>
+          <Link href="/configurator/dashboard" style={{ color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "'Outfit', sans-serif", textDecoration: "none" }}>Dashboard</Link>
+          <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 12 }}>/</span>
+          <span style={{ color: "rgba(0,242,254,0.7)", fontSize: 12, fontFamily: "'Outfit', sans-serif" }}>My Designs</span>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 2, position: "relative", zIndex: 1 }}>
           <Box>
-            <Typography variant="h4" fontWeight={700} color="#1a2a32">My Design Gallery</Typography>
-            <Typography variant="body1" color="#64748b">Browse and manage all your automotive customizations</Typography>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: "#ffffff", fontFamily: "'Orbitron', sans-serif", letterSpacing: "0.05em", mb: 0.5 }}>My Design Gallery</Typography>
+            <Typography sx={{ color: "rgba(255,255,255,0.6)", fontFamily: "'Outfit', sans-serif", fontSize: 14 }}>Browse and manage all your automotive customizations</Typography>
           </Box>
 
           {/* Toolbar buttons */}
@@ -205,17 +243,30 @@ export default function MyDesignsPage() {
           )}
         </Box>
 
-        {/* Selection count bar */}
-        {selectMode && (
-          <Box sx={{ mt: 1.5, px: 2, py: 1, background: "#fff8f8", border: "1px solid #fecaca", borderRadius: 1 }}>
-            <Typography sx={{ fontSize: 13, color: "#b91c1c", fontWeight: 600 }}>
-              {selectedIds.size === 0
-                ? "Click cards or use checkboxes to select designs"
-                : `${selectedIds.size} of ${designs.length} selected`}
-            </Typography>
-          </Box>
-        )}
       </Box>
+
+      {/* Selection count bar */}
+      {selectMode && (
+        <Box sx={{ mb: 3, px: 2, py: 1, background: "#fff8f8", border: "1px solid #fecaca", borderRadius: 1 }}>
+          <Typography sx={{ fontSize: 13, color: "#b91c1c", fontWeight: 600 }}>
+            {selectedIds.size === 0
+              ? "Click cards or use checkboxes to select designs"
+              : `${selectedIds.size} of ${designs.length} selected`}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Section label */}
+      <h2 style={{
+        fontSize: 11, fontWeight: 700,
+        fontFamily: "'Orbitron', sans-serif",
+        letterSpacing: "0.2em", textTransform: "uppercase",
+        color: "#2c5364", marginBottom: 20,
+        display: "flex", alignItems: "center", gap: 10,
+      }}>
+        <span style={{ width: 18, height: 1, background: "#2c5364", display: "inline-block" }} />
+        Saved Designs
+      </h2>
 
       {/* ── Grid ── */}
       {designs.length > 0 ? (
@@ -235,13 +286,18 @@ export default function MyDesignsPage() {
         <Box sx={{ textAlign: "center", py: 12, background: "white", border: "1px dashed #cbd5e1", borderRadius: 2 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>No designs found</Typography>
           <Typography variant="body2" color="#64748b" mb={4}>You haven't saved any car configurations yet.</Typography>
-          <Link href="/configurator/customization" style={{
+          <Link href="/configurator/selection" style={{
             padding: "12px 32px",
             background: "linear-gradient(135deg, #0f2027, #2c5364)",
             color: "white",
             textDecoration: "none",
             fontWeight: 600,
-            borderRadius: 4,
+            fontFamily: "'Orbitron', sans-serif",
+            fontSize: 11,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            borderRadius: 8,
+            display: "inline-block",
           }}>
             Create Your First Design
           </Link>
@@ -289,5 +345,6 @@ export default function MyDesignsPage() {
       </Snackbar>
 
     </Container>
+    </Box>
   );
 }

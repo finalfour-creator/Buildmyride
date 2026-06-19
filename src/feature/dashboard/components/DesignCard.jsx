@@ -1,3 +1,4 @@
+"use client";
 import { Box, Checkbox, Typography } from "@mui/material";
 import Link from "next/link";
 

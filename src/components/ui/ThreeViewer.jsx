@@ -8,63 +8,18 @@ import gsap from "gsap";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Determine if a mesh should receive body paint color.
- * Returns true for exterior body panels; false for windows, lights, interior, tyres, etc.
- */
-function isBodyPaintMesh(meshName) {
-  const n = (meshName || "").toLowerCase();
-
-  // Exclude patterns: things that should NOT be painted
-  const excludePatterns = [
-    "glass", "window", "windshield", "windscreen",
-    "light", "lamp", "headlight", "taillight", "fog", "indicator", "signal", "lens",
-    "interior", "seat", "dashboard", "dash", "steering", "console", "pedal", "knob",
-    "tyre", "tire", "wheel", "rim", "brake", "disc", "caliper",
-    "chrome", "emblem", "logo", "badge", "plate", "number", "text",
-    "mirror_glass", "wiper", "antenna", "grille", "grill", "mesh",
-    "rubber", "seal", "trim", "molding", "plastic", "carbon",
-    "exhaust", "pipe", "muffler", "tip",
-    "underbody", "undercarriage", "chassis", "frame", "suspension", "engine", "radiator", "motor",
-  ];
-
-  for (const pattern of excludePatterns) {
-    if (n.includes(pattern)) return false;
-  }
-
-  // Include patterns: things that SHOULD be painted (body panels)
-  const includePatterns = [
-    "body", "door", "hood", "bonnet", "fender", "bumper",
-    "roof", "trunk", "boot", "panel", "quarter", "pillar",
-    "skirt", "spoiler", "wing", "paint", "exterior", "shell",
-  ];
-
-  for (const pattern of includePatterns) {
-    if (n.includes(pattern)) return true;
-  }
-
-  // If no pattern matched, we perform a "generic" check.
-  // Many models use names like "Mesh_001". We allow these if they are large enough,
-  // but for simplicity in this helper, we'll allow generic names if they weren't excluded.
-  return true;
-}
-
-/**
- * Apply color to all paintable meshes within a THREE.Object3D.
- */
+/** Apply a paint colour to every mesh in the object tree. */
 function applyColorToPaintableMeshes(object, color) {
   if (!object || !color) return;
   object.traverse((node) => {
-    if (node.isMesh && node.material && isBodyPaintMesh(node.name)) {
-      const mats = Array.isArray(node.material) ? node.material : [node.material];
-      mats.forEach((m) => {
-        if (m.color) {
-          // If the material has a color property, set it.
-          // Note: Some models use textures for color. Setting color might tint them.
-          m.color.set(color);
-        }
-      });
-    }
+    if (!node.isMesh || !node.material) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    mats.forEach((m) => {
+      if (m.color) {
+        m.color.set(color);
+        m.needsUpdate = true;
+      }
+    });
   });
 }
 
@@ -453,7 +408,38 @@ const ThreeViewer = forwardRef(({
         return thumb.toDataURL("image/jpeg", 0.75);
       }
       return null;
-    }
+    },
+    focusOnPart: (partKey) => {
+      if (!cameraRef.current || !controlsRef.current) return;
+      const PRESETS = {
+        body:    { pos: [3, 1.5, 4],      look: [0, 0.2, 0] },
+        wheels:  { pos: [2.5, 0.3, 2.3],  look: [0.8, -0.1, 0.6] },
+        hood:    { pos: [0.3, 2.0, 2.8],  look: [0, 0.5, 0.8] },
+        bumper:  { pos: [0.2, 0.6, 3.5],  look: [0, 0.3, 1.5] },
+        // Rear-facing: camera behind car at -Z, looking toward the rear
+        trunk:   { pos: [0, 1.5, -4.5],   look: [0, 0.4, -0.8] },
+        boot:    { pos: [0, 1.5, -4.5],   look: [0, 0.4, -0.8] },
+        spoiler: { pos: [0.5, 2.2, -3.2], look: [0, 1.0, -0.8] },
+        light:   { pos: [3, 1.2, 4],      look: [0, 0.3, 1.2] },
+        nameplate: { pos: [0, 1.4, -4.2], look: [0, 0.5, -0.8] },
+      };
+      const key = Object.keys(PRESETS).find(k => partKey.toLowerCase().includes(k)) || 'body';
+      const { pos, look } = PRESETS[key];
+      const endPos = new THREE.Vector3(...pos);
+      const endTgt = new THREE.Vector3(...look);
+      const startPos = cameraRef.current.position.clone();
+      const startTgt = controlsRef.current.target.clone();
+      let f = 0;
+      const tick = () => {
+        if (!cameraRef.current || !controlsRef.current) return;
+        f++;
+        const t = 1 - Math.pow(1 - Math.min(f / 50, 1), 3);
+        cameraRef.current.position.lerpVectors(startPos, endPos, t);
+        controlsRef.current.target.lerpVectors(startTgt, endTgt, t);
+        if (f < 50) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    },
   }));
 
   // Wheel-related refs
@@ -826,7 +812,10 @@ const ThreeViewer = forwardRef(({
   }, [modelPath]);
 
   useEffect(() => {
-    if (!modelColor) return;
+    // Wait until both a color is chosen AND the model has finished loading.
+    // Without `loading` in the dep array, the effect fired at mount when
+    // modelRef.current was still null, and never re-fired once the model arrived.
+    if (!modelColor || loading) return;
 
     // 1. Apply to main chassis
     if (modelRef.current) {
@@ -842,7 +831,7 @@ const ThreeViewer = forwardRef(({
     if (customSpoilerRef.current) {
       applyColorToPaintableMeshes(customSpoilerRef.current, modelColor);
     }
-  }, [modelColor]);
+  }, [modelColor, loading]);
 
   // ── Wheel replacement effect ──────────────────────────────────────────────
   useEffect(() => {
@@ -1223,7 +1212,7 @@ const ThreeViewer = forwardRef(({
           //  • anchor is in the bottom 20 % of car height  (low body panel)
           //  • anchor is narrower than 15 % of car width   (mounting pedestal / bracket)
           //  • anchor bounding box is degenerate (NaN / Infinity)
-          const anchorTooLow    = anchorTop < carTopY * 0.2;
+          const anchorTooLow    = anchorTop < carTopY * 0.5;
           const anchorTooNarrow = anchorWidth < carWidth * 0.15;
           const anchorBad       = !isFinite(anchorWidth) || !isFinite(anchorTop);
 
@@ -1233,7 +1222,7 @@ const ThreeViewer = forwardRef(({
             const rearEndZ = anchorCenter.z <= carCenter.z
               ? modelBox.min.z   // rear is at -Z
               : modelBox.max.z;  // rear is at +Z
-            const trunkZ = carCenter.z + (rearEndZ - carCenter.z) * -0.93;
+            const trunkZ = carCenter.z + (rearEndZ - carCenter.z) * -0.90;
 
             // Trunk deck on a sedan sits at ~85% of the car's total height from ground.
             // Using the full roof (carTopY) overshoots — trunk lid is lower than the roof.

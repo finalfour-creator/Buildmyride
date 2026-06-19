@@ -171,13 +171,21 @@ function GroupHeader({ label }) {
 /* ══════════════════════════════════════════ MAIN EXPORT */
 export default function ModularPartOptions({ category, options, currentBuild, onSelect, horizontal = false }) {
   const catLower = category.toLowerCase();
-  const isBumper = catLower.includes("bumper");
-  const isDoor   = catLower.includes("door");
+  const isBumper    = catLower.includes("bumper");
+  const isDoor      = catLower.includes("door");
+  // Lights and nameplates can have multiple simultaneous selections (front + rear)
+  // so they also need position-based grouping with independent slot keys.
+  const isLights    = catLower.includes("light");
+  const isNameplate = catLower.includes("nameplate") || catLower.includes("nametag") || catLower.includes("emblem");
+  const needsPositionGroups = isBumper || isDoor || isLights || isNameplate;
+  // Lights/nameplates get category-prefixed slot keys ("lights_front", "lights_back")
+  // to avoid collision with bumper slot keys ("Front", "Back").
+  const needsCategoryPrefix = isLights || isNameplate;
 
   /* Build groups */
   let groups = { [category]: options };
 
-  if (isBumper || isDoor) {
+  if (needsPositionGroups) {
     const grouped = {};
     options.forEach((opt) => {
       const pos   = getPosition(opt.name);
@@ -190,10 +198,16 @@ export default function ModularPartOptions({ category, options, currentBuild, on
 
   const hasSubgroups = Object.keys(groups).length > 1;
 
-  const getSlotKey = (groupLabel) =>
-    hasSubgroups
-      ? (groupLabel === "Other" ? category.toLowerCase() : groupLabel.replace(" ", "_"))
-      : category.toLowerCase();
+  const getSlotKey = (groupLabel) => {
+    if (!hasSubgroups) return category.toLowerCase();
+    if (groupLabel === "Other") return category.toLowerCase();
+    const base = groupLabel.replace(" ", "_");
+    // Prefix with category name for lights/nameplates so "lights_Front" and
+    // bumper "Front" never share the same currentBuild slot.
+    return needsCategoryPrefix
+      ? `${catLower}_${base.toLowerCase()}`
+      : base;
+  };
 
   /* ── Horizontal group (NFS-style row) ── */
   const renderGroupHorizontal = (groupLabel, groupOptions) => {

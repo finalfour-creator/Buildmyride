@@ -347,6 +347,11 @@ export default function CustomizePage() {
     }
   }, [selectedColor, currentBuild, wheels, selectedSpoiler]);
 
+  // Camera close-up when switching part categories
+  useEffect(() => {
+    viewerRef.current?.focusOnPart?.(selectedPart);
+  }, [selectedPart]);
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -446,6 +451,156 @@ export default function CustomizePage() {
           {/* Attach flash overlay */}
           <AttachFlash trigger={attachTrigger} />
 
+          {/* ── LEFT SPECS PANEL ── */}
+          {modelData && (
+            <Box sx={{
+              position: "absolute",
+              left: { xs: 12, md: 28 },
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 20,
+              pointerEvents: "none",
+              display: { xs: "none", sm: "flex" },
+              flexDirection: "column",
+              animation: "fadeUp 0.9s ease 0.5s both",
+            }}>
+              <Typography sx={{
+                color: "rgba(255,255,255,0.28)",
+                fontSize: "0.56rem",
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                mb: 0.5,
+              }}>
+                {modelData.brand || "VEHICLE"}
+              </Typography>
+              <Typography sx={{
+                color: "#ffffff",
+                fontSize: "clamp(1rem, 2vw, 1.5rem)",
+                fontWeight: 900,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                lineHeight: 1.1,
+                mb: 2,
+                textShadow: "0 2px 24px rgba(0,0,0,0.9)",
+              }}>
+                {modelData.name}
+              </Typography>
+              <Box sx={{ width: 26, height: 1.5, background: "rgba(0,242,254,0.45)", mb: 2.5 }} />
+              {[
+                { label: "Top Speed", value: modelData.specs?.topSpeed, unit: "mph" },
+                { label: "Horsepower", value: modelData.specs?.horsepower, unit: "hp" },
+                { label: "0 – 62", value: modelData.specs?.acceleration, unit: "sec" },
+              ].map(({ label, value, unit }) => (
+                <Box key={label} sx={{ mb: 1.8 }}>
+                  <Typography sx={{
+                    color: "rgba(255,255,255,0.28)",
+                    fontSize: "0.5rem",
+                    letterSpacing: "0.22em",
+                    textTransform: "uppercase",
+                    mb: 0.25,
+                  }}>
+                    {label}
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.5 }}>
+                    <Typography sx={{
+                      color: value ? "#00f2fe" : "rgba(255,255,255,0.18)",
+                      fontSize: value ? "1rem" : "0.8rem",
+                      fontWeight: 700,
+                      lineHeight: 1.2,
+                    }}>
+                      {value || "—"}
+                    </Typography>
+                    {value && (
+                      <Typography component="span" sx={{ color: "rgba(0,242,254,0.45)", fontSize: "0.58rem", fontWeight: 400 }}>
+                        {unit}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* ── GHOSTED CAR NAME ── */}
+          {modelData?.name && (
+            <Box sx={{
+              position: "absolute",
+              bottom: 10,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 6,
+              pointerEvents: "none",
+              userSelect: "none",
+              whiteSpace: "nowrap",
+            }}>
+              <Typography sx={{
+                fontSize: "clamp(2.5rem, 8vw, 5.5rem)",
+                fontWeight: 900,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "transparent",
+                WebkitTextStroke: "0.5px rgba(255,255,255,0.055)",
+                lineHeight: 1,
+              }}>
+                {modelData.name}
+              </Typography>
+            </Box>
+          )}
+
+          {/* ── RIGHT COLOR SWATCHES ── */}
+          {selectedPart === "body" && colors.length > 0 && (
+            <Box sx={{
+              position: "absolute",
+              right: { xs: 12, md: 24 },
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 20,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.2,
+              animation: "slideInRight 0.4s ease",
+            }}>
+              <Typography sx={{
+                color: "rgba(255,255,255,0.22)",
+                fontSize: "0.48rem",
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                writingMode: "vertical-rl",
+                transform: "rotate(180deg)",
+                mb: 0.5,
+              }}>
+                PAINT
+              </Typography>
+              {colors.slice(0, 12).map((c) => {
+                const hex = c.value || c;
+                return (
+                  <Box
+                    key={hex}
+                    onClick={() => setSelectedColor(hex)}
+                    sx={{
+                      width: 22, height: 22,
+                      borderRadius: "50%",
+                      background: hex,
+                      border: selectedColor === hex
+                        ? "2px solid #00f2fe"
+                        : "1.5px solid rgba(255,255,255,0.15)",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                      pointerEvents: "all",
+                      boxShadow: selectedColor === hex ? `0 0 8px ${hex}99, 0 0 16px ${hex}44` : "none",
+                      "&:hover": {
+                        transform: "scale(1.3)",
+                        border: "1.5px solid rgba(255,255,255,0.45)",
+                      },
+                    }}
+                  />
+                );
+              })}
+            </Box>
+          )}
+
           {/* ── TOP HUD BAR ── */}
           <Box sx={{
             position: "absolute", top: 0, left: 0, right: 0,
@@ -470,7 +625,7 @@ export default function CustomizePage() {
                 color: "rgba(255,255,255,0.65)", fontSize: "0.72rem",
                 fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
               }}>
-                Vehicle Configurator
+                {modelData ? `${modelData.brand || ""} ${modelData.name || ""}`.trim() : "Vehicle Configurator"}
               </Typography>
             </Box>
             <SaveStatusPill saveStatus={saveStatus} isModified={isModified} />
