@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { Box, Typography, Grid, TextField, Button, Paper } from "@mui/material";
 import { useEffect } from "react";
+import apiClient from "@/lib/axios";
 
 export default function ProfileSettings({ showMessage }) {
   const { data: session, update } = useSession();
@@ -31,47 +32,22 @@ useEffect(() => {
     try {
       // Update name if changed
       if (profile.fullName !== session?.user?.name) {
-        const nameRes = await fetch("http://localhost:5000/api/users/update-name", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session?.accessToken}`
-          },
-          body: JSON.stringify({ name: profile.fullName }),
-        });
-        
-        if (!nameRes.ok) {
-          const error = await nameRes.json();
-          throw new Error(error.message || "Failed to update name");
-        }
+        await apiClient.put("/users/update-name", { name: profile.fullName });
       }
-      
+
       // Update email if changed
       if (profile.email !== session?.user?.email) {
-        const emailRes = await fetch("http://localhost:5000/api/users/update-email", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session?.accessToken}`
-          },
-          body: JSON.stringify({ email: profile.email }),
-        });
-        
-        if (!emailRes.ok) {
-          const error = await emailRes.json();
-          throw new Error(error.message || "Failed to update email");
-        }
+        await apiClient.put("/users/update-email", { email: profile.email });
       }
-      
-      // await update();
+
       await update({
-  name: profile.fullName,
-  email: profile.email,
-});
+        name: profile.fullName,
+        email: profile.email,
+      });
       showMessage("Profile updated successfully");
-      
+
     } catch (error) {
-      showMessage(error.message || "Update failed");
+      showMessage(error.response?.data?.message || error.message || "Update failed");
     } finally {
       setLoading(false);
     }

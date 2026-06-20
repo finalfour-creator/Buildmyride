@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Box, Typography, Grid, TextField, Button, Paper } from "@mui/material";
 import { useSession } from "next-auth/react";
+import apiClient from "@/lib/axios";
 
 const passwordItems = [
   { label: "Current Password", name: "currentPassword", icon: "🔒", color: "#2c5364", type: "password" },
@@ -109,28 +110,10 @@ export default function PasswordSettings({ showMessage }) {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/users/update-password", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.accessToken}`,
-        },
-        body: JSON.stringify({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword,
-        }),
+      await apiClient.put("/users/update-password", {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
       });
-
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        data = { message: "Server returned invalid response" };
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to update password");
-      }
 
       // Reset form on success
       setPasswordData({
@@ -143,7 +126,7 @@ export default function PasswordSettings({ showMessage }) {
       showMessage("Password updated successfully");
 
     } catch (error) {
-      showMessage(error.message || "Update failed");
+      showMessage(error.response?.data?.message || error.message || "Update failed");
     } finally {
       setLoading(false);
     }

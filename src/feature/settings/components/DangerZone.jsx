@@ -145,6 +145,7 @@
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import apiClient from "@/lib/axios";
 import {
   Box,
   Typography,
@@ -172,20 +173,7 @@ export default function DangerZone({ showMessage }) {
     setIsDeleting(true);
 
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/users/${session?.user?.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${session?.accessToken}`,
-          },
-        }
-      );
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to delete account");
-      }
+      await apiClient.delete(`/users/${session?.user?.id}`);
 
       // ✅ logout
       await signOut({ redirect: false });
@@ -194,7 +182,7 @@ export default function DangerZone({ showMessage }) {
       router.push("/login");
 
     } catch (err) {
-      showMessage(err.message || "Delete failed");
+      showMessage(err.response?.data?.message || err.message || "Delete failed");
     } finally {
       setIsDeleting(false);
     }
