@@ -61,6 +61,7 @@ export default function ArAnchoredModels({
   const stateRef = useRef({
     scene: null, camera: null, renderer: null,
     loadedModels: new Map(),
+    loadingModels: new Set(),
     rafId: null,
   });
 
@@ -203,7 +204,7 @@ export default function ArAnchoredModels({
       }
     }
 
-    async function syncModels() {
+    function syncModels() {
       // Remove unwanted anchors
       for (const [key, group] of s.loadedModels) {
         if (!wanted.has(key) || !anchors[key]) {
@@ -277,62 +278,69 @@ export default function ArAnchoredModels({
         }
 
         // ── Load new asset ──────────────────────────────────────────────────
-        try {
-          const group = new THREE.Group();
-          let loadedObject = null;
+        if (s.loadingModels.has(key)) continue;
+        s.loadingModels.add(key);
 
-          if (cfg.model) {
-            const gltf = await loadGltf(cfg.model);
-            if (cancelled || !s.scene) return;
+        (async () => {
+          try {
+            const group = new THREE.Group();
+            let loadedObject = null;
 
-            enableShadows(gltf);
-            fitToMaxDimension(gltf, 1.0);
-            storeOriginalColors(gltf); // must come before any colour application
-            if (cfg.rotation) gltf.rotation.set(...cfg.rotation);
+            if (cfg.model) {
+              const gltf = await loadGltf(cfg.model);
+              if (!s.scene) return;
 
-            // Use refs so we always get the live colour even if this closure is stale
-            const partColor  = partColorsRef.current?.[key];
-            const bodyColor  = paintColorRef.current;
-            if (partColor)      applyPaintColor(gltf, partColor);
-            else if (bodyColor) applyPaintColor(gltf, bodyColor);
+              enableShadows(gltf);
+              fitToMaxDimension(gltf, 1.0);
+              storeOriginalColors(gltf); // must come before any colour application
+              if (cfg.rotation) gltf.rotation.set(...cfg.rotation);
 
-            group.userData = { anchorKey: key, type: "model" };
-            loadedObject = gltf;
-          } else if (cfg.texture) {
-            const texture = await loadTexture(cfg.texture);
-            if (cancelled || !s.scene) return;
+              // Use refs so we always get the live colour even if this closure is stale
+              const partColor  = partColorsRef.current?.[key];
+              const bodyColor  = paintColorRef.current;
+              if (partColor)      applyPaintColor(gltf, partColor);
+              else if (bodyColor) applyPaintColor(gltf, bodyColor);
 
-            const aspect   = cfg.aspect || 1.0;
-            const geometry = new THREE.PlaneGeometry(aspect, 1.0);
-            const material = new THREE.MeshStandardMaterial({
-              map:     texture,
-              transparent: true,
-              side:    THREE.DoubleSide,
-              roughness:   0.3,
-              metalness:   0.1,
-              depthWrite:  false,
-              polygonOffset: true,
-              polygonOffsetFactor: -1,
-              polygonOffsetUnits:  -1,
-            });
-            const mesh = new THREE.Mesh(geometry, material);
-            if (cfg.rotation) mesh.rotation.set(...cfg.rotation);
+              group.userData = { anchorKey: key, type: "model" };
+              loadedObject = gltf;
+            } else if (cfg.texture) {
+              const texture = await loadTexture(cfg.texture);
+              if (!s.scene) return;
 
-            group.userData = { anchorKey: key, type: "decal" };
-            loadedObject = mesh;
+              const aspect   = cfg.aspect || 1.0;
+              const geometry = new THREE.PlaneGeometry(aspect, 1.0);
+              const material = new THREE.MeshStandardMaterial({
+                map:     texture,
+                transparent: true,
+                side:    THREE.DoubleSide,
+                roughness:   0.3,
+                metalness:   0.1,
+                depthWrite:  false,
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                polygonOffsetUnits:  -1,
+              });
+              const mesh = new THREE.Mesh(geometry, material);
+              if (cfg.rotation) mesh.rotation.set(...cfg.rotation);
+
+              group.userData = { anchorKey: key, type: "decal" };
+              loadedObject = mesh;
+            }
+
+            if (loadedObject) {
+              group.add(loadedObject);
+              group.position.set(wx, wy, wz);
+              computeScale(key, cfg, scaleRefBox, group);
+              group.visible = true;
+              s.scene.add(group);
+              s.loadedModels.set(key, group);
+            }
+          } catch (err) {
+            console.warn(`[ArAnchoredModels] Failed to load ${key}:`, err.message);
+          } finally {
+            s.loadingModels.delete(key);
           }
-
-          if (loadedObject) {
-            group.add(loadedObject);
-            group.position.set(wx, wy, wz);
-            computeScale(key, cfg, scaleRefBox, group);
-            group.visible = true;
-            s.scene.add(group);
-            s.loadedModels.set(key, group);
-          }
-        } catch (err) {
-          console.warn(`[ArAnchoredModels] Failed to load ${key}:`, err.message);
-        }
+        })();
       }
 
       // ── Reposition every loaded model with the latest detection frame ──────
@@ -390,7 +398,6 @@ export default function ArAnchoredModels({
     }
 
     syncModels();
-    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedView, isLocked, enabledAnchors, containerRef, overlayBox, parts, videoRef]);
 

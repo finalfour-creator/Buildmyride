@@ -149,25 +149,25 @@ export const ANCHOR_CONFIG = {
   left: {
     wheel_front: {
       nx: 0.210, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel1.glb",
+      model: "/models/Wheels/Wheel1.glb",
       scale: 0.58, rotation: [0, Math.PI / 2, 0],
       label: "Front Wheel",
     },
     wheel_rear: {
       nx: 0.790, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel1.glb",
+      model: "/models/Wheels/Wheel1.glb",
       scale: 0.58, rotation: [0, Math.PI / 2, 0],
       label: "Rear Wheel",
     },
     wheel_front_v2: {
       nx: 0.210, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      model: "/models/Wheels/Wheel2.glb",
       scale: 0.58, rotation: [0, Math.PI / 2, 0],
       label: "Front Wheel (Style 2)",
     },
     wheel_rear_v2: {
       nx: 0.790, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      model: "/models/Wheels/Wheel2.glb",
       scale: 0.58, rotation: [0, Math.PI / 2, 0],
       label: "Rear Wheel (Style 2)",
     },
@@ -204,25 +204,25 @@ export const ANCHOR_CONFIG = {
   right: {
     wheel_front: {
       nx: 0.790, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel1.glb",
+      model: "/models/Wheels/Wheel1.glb",
       scale: 0.58, rotation: [0, -Math.PI / 2, 0],
       label: "Front Wheel",
     },
     wheel_rear: {
       nx: 0.210, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel1.glb",
+      model: "/models/Wheels/Wheel1.glb",
       scale: 0.58, rotation: [0, -Math.PI / 2, 0],
       label: "Rear Wheel",
     },
     wheel_front_v2: {
       nx: 0.790, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      model: "/models/Wheels/Wheel2.glb",
       scale: 0.58, rotation: [0, -Math.PI / 2, 0],
       label: "Front Wheel (Style 2)",
     },
     wheel_rear_v2: {
       nx: 0.210, ny: 0.80, wz: 0.18,
-      model: "/models/Wheels/Honda_City_Wheel2.glb",
+      model: "/models/Wheels/Wheel2.glb",
       scale: 0.58, rotation: [0, -Math.PI / 2, 0],
       label: "Rear Wheel (Style 2)",
     },
