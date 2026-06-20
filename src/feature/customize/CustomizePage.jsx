@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Box, Typography, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
 import PartSelector from "./components/PartSelector";
+import AiChatbox from "./components/AiChatbox";
 import apiClient from "@/lib/axios";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -45,6 +46,9 @@ export default function CustomizePage() {
 
   // Delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // AI chatbox
+  const [aiOpen, setAiOpen] = useState(false);
 
   // Snackbar feedback
   const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
@@ -417,6 +421,13 @@ export default function CustomizePage() {
           {/* Right: action buttons */}
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
             <GlowButton
+              onClick={() => setAiOpen((prev) => !prev)}
+              color="#c77dff"
+              icon="🤖"
+            >
+              AI Advisor
+            </GlowButton>
+            <GlowButton
               onClick={() => router.push("/configurator/dashboard")}
               color="#00f2fe"
               icon="←"
@@ -512,6 +523,19 @@ export default function CustomizePage() {
             </GlowButton>
           </DialogActions>
         </Dialog>
+
+        {/* ══ AI CHATBOX ══ */}
+        <AiChatbox
+          isOpen={aiOpen}
+          onClose={() => setAiOpen(false)}
+          carName={modelData?.name}
+          buildContext={{
+            color: selectedColor,
+            finish: "glossy",
+            parts: currentBuild,
+            wheels,
+          }}
+        />
 
         {/* ══ SNACKBAR ══ */}
         <Snackbar
