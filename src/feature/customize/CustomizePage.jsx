@@ -139,7 +139,22 @@ export default function CustomizePage() {
     async function fetchData() {
       try {
         setLoadingModel(true);
-        const modelEndpoint = carId ? `/models/${carId}` : "/models";
+        let resolvedCarId = carId;
+        let savedDesign = null;
+
+        if (designId) {
+          try {
+            const designRes = await apiClient.get(`/designs/${designId}`);
+            savedDesign = designRes.data;
+            if (!resolvedCarId && savedDesign?.state?.carId) {
+              resolvedCarId = savedDesign.state.carId;
+            }
+          } catch (err) {
+            console.error("[Resume] Failed:", err);
+          }
+        }
+
+        const modelEndpoint = resolvedCarId ? `/models/${resolvedCarId}` : "/models";
         const modelRes = await apiClient.get(modelEndpoint);
         const model = Array.isArray(modelRes.data) ? modelRes.data[0] : modelRes.data;
 
@@ -147,11 +162,7 @@ export default function CustomizePage() {
           setModelData(model);
           setModelUrl(model.chassisUrl || model.modelUrl);
 
-          if (designId) {
-            try {
-              const designRes = await apiClient.get(`/designs/${designId}`);
-              const savedDesign = designRes.data;
-              if (savedDesign?.state) {
+          if (savedDesign?.state) {
                 const { paint, wheels: savedWheels, modularParts } = savedDesign.state;
                 if (paint?.color) setSelectedColor(paint.color);
                 if (savedWheels) setWheels(savedWheels);
@@ -167,10 +178,6 @@ export default function CustomizePage() {
                   }
                 }
                 if (savedDesign.state.spoiler) setSelectedSpoiler(savedDesign.state.spoiler);
-              }
-            } catch (err) {
-              console.error("[Resume] Failed:", err);
-            }
           }
 
           const partsRes = await apiClient.get(`/parts?carId=${model._id}`);
