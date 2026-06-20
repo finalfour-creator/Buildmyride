@@ -11,25 +11,9 @@ import { INFERENCE_SKIPPED } from "../lib/onnxSetup";
 /** Consecutive frames without a car before clearing the box (YOLO mode) */
 const NO_CAR_CLEAR_FRAMES = 2;
 
-/** Per-frame interpolation factor — how fast the displayed box chases the target */
-const TRACK_LERP = 0.22;
-/** Sub-pixel threshold below which we stop re-rendering (box has settled) */
-const SETTLE_EPSILON = 0.4;
-
 function isMobileDevice() {
   if (typeof navigator === "undefined") return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-/** True if two boxes differ enough to be worth a re-render. */
-function bboxMoved(a, b) {
-  if (!a || !b) return true;
-  return (
-    Math.abs(a.x - b.x) > SETTLE_EPSILON ||
-    Math.abs(a.y - b.y) > SETTLE_EPSILON ||
-    Math.abs(a.width - b.width) > SETTLE_EPSILON ||
-    Math.abs(a.height - b.height) > SETTLE_EPSILON
-  );
 }
 
 /**
@@ -42,8 +26,7 @@ export default function useYoloDetection(videoRef, isCameraActive) {
   const [statusMessage, setStatusMessage] = useState("Initializing detection…");
   const [isInferring, setIsInferring] = useState(false);
 
-  const smoothedRef = useRef(null);   // displayed box (interpolated every frame)
-  const targetRef = useRef(null);     // latest detected box (updated at detection cadence)
+  const smoothedRef = useRef(null);
   const rafRef = useRef(null);
   const frameCountRef = useRef(0);
   const lastFpsTickRef = useRef(0);
@@ -123,16 +106,15 @@ export default function useYoloDetection(videoRef, isCameraActive) {
       const hasValidDetection =
         raw && (detectionMode === "demo" || raw.confidence >= 0.35);
 
-      // Detection only updates the *target*. The render loop interpolates the
-      // displayed box toward it every frame, so tracking stays smooth at 60fps
-      // even though inference runs at a fraction of that rate.
       if (hasValidDetection) {
-        targetRef.current = raw;
+        smoothedRef.current = lerpBBox(smoothedRef.current, raw, 0.3);
+        setBbox({ ...smoothedRef.current });
       } else if (
         detectionMode === "yolo" &&
         noCarFramesRef.current >= NO_CAR_CLEAR_FRAMES
       ) {
-        targetRef.current = null;
+        smoothedRef.current = null;
+        setBbox(null);
       }
     } catch (err) {
       console.error("[AR YOLO]", err);
@@ -140,7 +122,9 @@ export default function useYoloDetection(videoRef, isCameraActive) {
       setDetectionMode("demo");
       const video = videoRef.current;
       if (video?.videoWidth) {
-        targetRef.current = getDemoBBox(video.videoWidth, video.videoHeight);
+        const demo = getDemoBBox(video.videoWidth, video.videoHeight);
+        smoothedRef.current = lerpBBox(smoothedRef.current, demo, 0.3);
+        setBbox({ ...smoothedRef.current });
       }
     } finally {
       inferringRef.current = false;
@@ -153,7 +137,6 @@ export default function useYoloDetection(videoRef, isCameraActive) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       setBbox(null);
       smoothedRef.current = null;
-      targetRef.current = null;
       noCarFramesRef.current = 0;
       return;
     }
@@ -165,32 +148,19 @@ export default function useYoloDetection(videoRef, isCameraActive) {
       if (!running) return;
       rafRef.current = requestAnimationFrame(loop);
 
-      // 1. Throttled inference — updates targetRef only.
       frameSkip += 1;
       const mobile = isMobileDevice();
       const skip = detectionMode === "yolo" ? (mobile ? 8 : 3) : 2;
-      if (frameSkip % skip === 0) {
-        runDetection();
+      if (frameSkip % skip !== 0) return;
 
-        frameCountRef.current += 1;
-        const now = performance.now();
-        if (now - lastFpsTickRef.current >= 1000) {
-          setFps(frameCountRef.current);
-          frameCountRef.current = 0;
-          lastFpsTickRef.current = now;
-        }
-      }
+      runDetection();
 
-      // 2. Per-frame interpolation — runs every frame for smooth 60fps tracking.
-      const target = targetRef.current;
-      if (target) {
-        const prev = smoothedRef.current;
-        const next = prev ? lerpBBox(prev, target, TRACK_LERP) : target;
-        smoothedRef.current = next;
-        if (bboxMoved(prev, next)) setBbox({ ...next });
-      } else if (smoothedRef.current) {
-        smoothedRef.current = null;
-        setBbox(null);
+      frameCountRef.current += 1;
+      const now = performance.now();
+      if (now - lastFpsTickRef.current >= 1000) {
+        setFps(frameCountRef.current);
+        frameCountRef.current = 0;
+        lastFpsTickRef.current = now;
       }
     };
 

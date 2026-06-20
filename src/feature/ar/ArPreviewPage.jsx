@@ -2,15 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Typography, CircularProgress, Snackbar, Alert } from "@mui/material";
 import {
-  HudStyleInjector,
-  GlowButton,
-  SaveStatusPill,
-  ScanLine,
-  CornerBrackets,
-} from "@/components/hud";
-import { captureArFrame, downloadBlob, shareBlob } from "./lib/arCapture";
+  Box,
+  Button,
+  Typography,
+  IconButton,
+  CircularProgress,
+} from "@mui/material";
 import useCamera from "./hooks/useCamera";
 import ArPartsPanel from "./components/ArPartsPanel";
 import ArSelectionSummary from "./components/ArSelectionSummary";
@@ -61,11 +59,6 @@ export default function ArPreviewPage() {
   const [enabledAnchors, setEnabledAnchors] = useState(new Set());  // anchor keys to render
   const [partColors,     setPartColors]     = useState({});         // { hood, front_bumper, rear_bumper }
 
-  // Capture / compare controls
-  const [showOverlays, setShowOverlays] = useState(true);  // false = "before" (raw camera)
-  const [isCapturing,  setIsCapturing]  = useState(false);
-  const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
-
   // Automatically enable all assets for the selected view by default.
   // v2 wheel variants are excluded — they are activated by the Wheel Style picker.
   useEffect(() => {
@@ -83,13 +76,11 @@ export default function ArPreviewPage() {
   const isCarMode      = mode === "car";
   const isPartsMode    = mode === "parts";
 
-  // Segmentation only drives the paint overlay, which is gated to "car" mode.
-  // Template mode does NOT consume carMask (useViewAlignment ignores it), so we
-  // skip this 14 MB model there to keep template inference fast.
+  // Segmentation runs in both "car" and "template" modes
   const { carMask, segMode, segFps } =
-    useYoloSegmentation(videoRef, isActive && isCarMode);
+    useYoloSegmentation(videoRef, isActive && (isCarMode || isTemplateMode));
 
-  // Detection runs in "car" mode; also anchors 3D models in "template" mode
+  // Detection runs in "car" mode; also feeds alignment in "template" mode
   const {
     bbox,
     detectionMode,
@@ -141,55 +132,6 @@ export default function ArPreviewPage() {
     router.push("/configurator/dashboard");
   };
 
-  // Composite the camera + overlays into a PNG. Screenshots always include the
-  // customization (overlays are forced on for the capture frame).
-  const grabFrame = useCallback(async () => {
-    const wasHidden = !showOverlays;
-    if (wasHidden) setShowOverlays(true);
-    // Let React paint the overlays + Three.js render one frame before reading.
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const blob = await captureArFrame(cameraContainerRef.current);
-    return blob;
-  }, [showOverlays]);
-
-  const handleScreenshot = useCallback(async () => {
-    if (isCapturing) return;
-    setIsCapturing(true);
-    try {
-      const blob = await grabFrame();
-      downloadBlob(blob, `buildmyride-ar-${Date.now()}.png`);
-      setSnack({ open: true, msg: "Screenshot saved", severity: "success" });
-    } catch (err) {
-      console.error("[AR Screenshot]", err);
-      setSnack({ open: true, msg: "Couldn't capture screenshot", severity: "error" });
-    } finally {
-      setIsCapturing(false);
-    }
-  }, [grabFrame, isCapturing]);
-
-  const handleShare = useCallback(async () => {
-    if (isCapturing) return;
-    setIsCapturing(true);
-    try {
-      const blob = await grabFrame();
-      const result = await shareBlob(blob, {
-        filename: `buildmyride-ar-${Date.now()}.png`,
-        title: "My BuildMyRide AR build",
-        text: "Customized in AR with BuildMyRide",
-      });
-      setSnack({
-        open: true,
-        msg: result === "shared" ? "Shared!" : "Share not supported — image downloaded",
-        severity: "success",
-      });
-    } catch (err) {
-      console.error("[AR Share]", err);
-      setSnack({ open: true, msg: "Couldn't share image", severity: "error" });
-    } finally {
-      setIsCapturing(false);
-    }
-  }, [grabFrame, isCapturing]);
-
   return (
     <Box
       sx={{
@@ -197,14 +139,11 @@ export default function ArPreviewPage() {
         inset: 0,
         display: "flex",
         flexDirection: "column",
-        bgcolor: "#03060b",
-        fontFamily: "'Inter', 'Roboto', sans-serif",
+        bgcolor: "#0a0f12",
         zIndex: 1200,
       }}
     >
-      <HudStyleInjector />
-
-      {/* Top HUD bar */}
+      {/* Top bar */}
       <Box
         sx={{
           height: 56,
@@ -212,48 +151,36 @@ export default function ArPreviewPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          px: 3,
-          borderBottom: "1px solid rgba(0,242,254,0.12)",
-          background: "linear-gradient(180deg, rgba(3,6,11,0.92) 0%, rgba(3,6,11,0.6) 100%)",
-          animation: "fadeUp 0.5s ease",
+          px: 2,
+          borderBottom: "1px solid #2c5364",
+          bgcolor: "#0f2027",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
-          <Typography
-            sx={{
-              color: "#00f2fe",
-              fontWeight: 900,
-              fontSize: "1rem",
-              letterSpacing: "3px",
-              textTransform: "uppercase",
-              textShadow: "0 0 20px rgba(0,242,254,0.6)",
-            }}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <IconButton
+            onClick={handleClose}
+            sx={{ color: "#fff" }}
+            aria-label="Close AR Preview"
           >
-            BUILDMYRIDE
-          </Typography>
-          <Box sx={{ width: 1, height: 18, background: "rgba(0,242,254,0.2)" }} />
-          <Typography
-            sx={{
-              color: "rgba(255,255,255,0.65)",
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-            }}
-          >
+            ✕
+          </IconButton>
+          <Typography variant="h6" sx={{ color: "#fff", fontWeight: 600, fontSize: "1.1rem" }}>
             AR Preview
           </Typography>
-          <SaveStatusPill saveStatus="saved" />
         </Box>
 
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <GlowButton onClick={handleClose} color="#00f2fe" icon="←">
-            Back
-          </GlowButton>
-          <GlowButton disabled color="#00f2fe" icon="💾">
-            Save AR Build
-          </GlowButton>
-        </Box>
+        <Button
+          variant="outlined"
+          size="small"
+          disabled
+          sx={{
+            color: "rgba(255,255,255,0.4)",
+            borderColor: "rgba(255,255,255,0.2)",
+            textTransform: "none",
+          }}
+        >
+          Save AR Preview (Phase 6)
+        </Button>
       </Box>
 
       {/* Main: camera + parts (column on phone) */}
@@ -340,23 +267,26 @@ export default function ArPreviewPage() {
                 </Typography>
               )}
 
-              <GlowButton
+              <Button
                 variant="contained"
                 onClick={startCamera}
                 disabled={isStarting}
-                color="#00f2fe"
-                icon={isStarting ? null : "📷"}
-                sx={{ px: 4, py: 1.25, fontSize: "0.85rem" }}
+                sx={{
+                  background: "linear-gradient(135deg, #0f2027, #2c5364)",
+                  textTransform: "none",
+                  px: 4,
+                  py: 1.25,
+                }}
               >
                 {isStarting ? (
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <CircularProgress size={16} sx={{ color: "#05161e" }} />
+                    <CircularProgress size={18} sx={{ color: "#fff" }} />
                     Starting camera…
                   </Box>
                 ) : (
                   "Start camera"
                 )}
-              </GlowButton>
+              </Button>
             </Box>
           )}
 
@@ -366,45 +296,22 @@ export default function ArPreviewPage() {
                 position: "absolute",
                 bottom: 16,
                 left: 16,
-                right: 16,
-                zIndex: 6,
                 display: "flex",
-                flexWrap: "wrap",
                 gap: 1,
-                alignItems: "center",
               }}
             >
-              <GlowButton onClick={stopCamera} danger color="#ff4d6d" icon="⏹">
-                Stop
-              </GlowButton>
-
-              <Box sx={{ flex: 1 }} />
-
-              <GlowButton
-                onClick={() => setShowOverlays((v) => !v)}
-                color="#00f2fe"
-                icon={showOverlays ? "👁" : "🚗"}
-                sx={{ opacity: showOverlays ? 1 : 0.85 }}
-              >
-                {showOverlays ? "View Original" : "View Custom"}
-              </GlowButton>
-              <GlowButton
-                onClick={handleScreenshot}
-                disabled={isCapturing}
-                color="#00f2fe"
-                icon="📸"
-              >
-                {isCapturing ? "…" : "Photo"}
-              </GlowButton>
-              <GlowButton
-                onClick={handleShare}
-                disabled={isCapturing}
+              <Button
+                size="small"
                 variant="contained"
-                color="#00f2fe"
-                icon="↗"
+                onClick={stopCamera}
+                sx={{
+                  bgcolor: "rgba(0,0,0,0.65)",
+                  textTransform: "none",
+                  "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
+                }}
               >
-                Share
-              </GlowButton>
+                Stop camera
+              </Button>
             </Box>
           )}
 
@@ -435,33 +342,18 @@ export default function ArPreviewPage() {
                 left: 12,
                 px: 1.5,
                 py: 0.5,
-                borderRadius: "20px",
-                bgcolor: "rgba(57,211,83,0.15)",
-                border: "1px solid rgba(57,211,83,0.4)",
-                backdropFilter: "blur(8px)",
-                display: "flex",
-                alignItems: "center",
-                gap: 0.75,
+                borderRadius: 1,
+                bgcolor: "rgba(76, 175, 80, 0.85)",
                 zIndex: 3,
               }}
             >
-              <Box
-                sx={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  bgcolor: "#39d353",
-                  boxShadow: "0 0 8px #39d353",
-                  animation: "dotPulse 1.4s ease infinite",
-                }}
-              />
-              <Typography variant="caption" sx={{ color: "#39d353", fontWeight: 700, letterSpacing: "0.6px" }}>
+              <Typography variant="caption" sx={{ color: "#fff", fontWeight: 600 }}>
                 Camera active
               </Typography>
             </Box>
           )}
 
-          {isActive && bbox && showOverlays && (
+          {isActive && bbox && (
             <ArThreeOverlay
               ref={arOverlayRef}
               containerRef={cameraContainerRef}
@@ -476,7 +368,7 @@ export default function ArPreviewPage() {
           )}
 
           {/* Pixel-level segmentation mask — only in Whole Car mode */}
-          {isActive && mode === "car" && showOverlays && (
+          {isActive && mode === "car" && (
             <ArSegmentationOverlay
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -535,7 +427,7 @@ export default function ArPreviewPage() {
           )}
 
           {/* Car-parts detection overlay — only in Car Parts mode */}
-          {isActive && mode === "parts" && partsMode === "parts" && showOverlays && (
+          {isActive && mode === "parts" && partsMode === "parts" && (
             <ArPartsOverlay
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -628,7 +520,7 @@ export default function ArPreviewPage() {
 
           {/* Outlines completely removed. Snapping directly to detected car parts. */}
 
-          {isActive && isTemplateMode && showOverlays && (
+          {isActive && isTemplateMode && (
             <ArAnchoredModels
               containerRef={cameraContainerRef}
               videoRef={videoRef}
@@ -640,14 +532,6 @@ export default function ArPreviewPage() {
               parts={parts}
               partColors={partColors}
             />
-          )}
-
-          {/* HUD framing — matches the configurator viewport */}
-          {isActive && (
-            <>
-              <CornerBrackets />
-              <ScanLine />
-            </>
           )}
         </Box>
 
@@ -666,30 +550,6 @@ export default function ArPreviewPage() {
           setPartColors={setPartColors}
         />
       </Box>
-
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={3000}
-        onClose={() => setSnack((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          severity={snack.severity}
-          onClose={() => setSnack((s) => ({ ...s, open: false }))}
-          sx={{
-            background: "rgba(8,19,24,0.95)",
-            border: `1px solid ${snack.severity === "success" ? "rgba(57,211,83,0.3)" : "rgba(255,77,109,0.3)"}`,
-            borderRadius: "12px",
-            backdropFilter: "blur(12px)",
-            color: "#e2e8f0",
-            "& .MuiAlert-icon": {
-              color: snack.severity === "success" ? "#39d353" : "#ff4d6d",
-            },
-          }}
-        >
-          {snack.msg}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }
