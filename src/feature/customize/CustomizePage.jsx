@@ -1,235 +1,18 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Box, Typography, Button, Tooltip, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
+import { Box, Typography, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import ThreeViewer from "@/components/ui/ThreeViewer";
 import PartSelector from "./components/PartSelector";
 import apiClient from "@/lib/axios";
 import { useSearchParams, useRouter } from "next/navigation";
-
-/* ─── keyframe CSS injected once ─── */
-const GLOBAL_STYLES = `
-  @keyframes pulseGlow {
-    0%, 100% { opacity: 0.6; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.04); }
-  }
-  @keyframes ripple {
-    0% { transform: scale(0); opacity: 0.6; }
-    100% { transform: scale(3); opacity: 0; }
-  }
-  @keyframes scanLine {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(400%); }
-  }
-  @keyframes attachFlash {
-    0%   { opacity: 0; transform: scale(0.85); }
-    30%  { opacity: 1; transform: scale(1.06); }
-    60%  { opacity: 0.7; transform: scale(0.98); }
-    100% { opacity: 0; transform: scale(1); }
-  }
-  @keyframes dotPulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.5); }
-  }
-  @keyframes borderSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  @keyframes slideInRight {
-    from { opacity: 0; transform: translateX(20px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes shimmer {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
-  }
-`;
-
-function StyleInjector() {
-  useEffect(() => {
-    if (document.getElementById("customize-global-styles")) return;
-    const tag = document.createElement("style");
-    tag.id = "customize-global-styles";
-    tag.textContent = GLOBAL_STYLES;
-    document.head.appendChild(tag);
-  }, []);
-  return null;
-}
-
-/* ─── Save Status Pill ─── */
-function SaveStatusPill({ saveStatus, isModified }) {
-  const isUnsaved = saveStatus === "modified" || isModified;
-  const color =
-    saveStatus === "saving"  ? "#00f2fe" :
-    saveStatus === "error"   ? "#ff4d6d" :
-    isUnsaved                ? "#ffd60a" : "#39d353";
-  const label =
-    saveStatus === "saving"  ? "Saving…" :
-    saveStatus === "error"   ? "Save Error" :
-    isUnsaved                ? "Unsaved Changes" : "All Saved";
-
-  return (
-    <Box sx={{
-      display: "flex", alignItems: "center", gap: 1,
-      px: 1.8, py: 0.65,
-      borderRadius: "20px",
-      background: "rgba(8,19,24,0.65)",
-      border: `1px solid ${color}33`,
-      backdropFilter: "blur(8px)",
-      animation: "fadeUp 0.4s ease",
-    }}>
-      <Box sx={{
-        width: 7, height: 7, borderRadius: "50%",
-        background: color,
-        boxShadow: `0 0 8px ${color}`,
-        animation: saveStatus === "saving" ? "dotPulse 1s ease infinite" : "none",
-      }} />
-      <Typography sx={{ color: "#e2e8f0", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.6px" }}>
-        {label}
-      </Typography>
-    </Box>
-  );
-}
-
-/* ─── Animated Glow Button ─── */
-function GlowButton({ children, onClick, disabled, color = "#00f2fe", danger = false, variant = "outlined", icon, sx = {} }) {
-  const [ripples, setRipples] = useState([]);
-  const base = danger ? "#ff4d6d" : color;
-
-  const handleClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const id = Date.now();
-    setRipples(r => [...r, { id, x, y }]);
-    setTimeout(() => setRipples(r => r.filter(rr => rr.id !== id)), 600);
-    onClick?.(e);
-  };
-
-  const isContained = variant === "contained";
-
-  return (
-    <Box
-      component="button"
-      onClick={handleClick}
-      disabled={disabled}
-      sx={{
-        position: "relative", overflow: "hidden",
-        display: "inline-flex", alignItems: "center", gap: 0.8,
-        px: 2.4, py: 0.85,
-        borderRadius: "8px",
-        fontFamily: "inherit",
-        fontSize: "0.78rem",
-        fontWeight: 700,
-        letterSpacing: "0.5px",
-        cursor: disabled ? "not-allowed" : "pointer",
-        border: `1.5px solid ${isContained ? "transparent" : `${base}55`}`,
-        background: isContained
-          ? `linear-gradient(135deg, ${base}22, ${base}44)`
-          : "rgba(8,19,24,0.5)",
-        color: isContained ? "#05161e" : base,
-        backdropFilter: "blur(8px)",
-        transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
-        opacity: disabled ? 0.5 : 1,
-        "&:hover": disabled ? {} : {
-          borderColor: base,
-          background: isContained
-            ? `linear-gradient(135deg, ${base}55, ${base}88)`
-            : `${base}11`,
-          boxShadow: `0 0 18px ${base}44, 0 0 40px ${base}22`,
-          transform: "translateY(-1px) scale(1.02)",
-        },
-        "&:active": { transform: "scale(0.97) translateY(0)" },
-        ...sx,
-      }}
-    >
-      {/* Ripple effects */}
-      {ripples.map(r => (
-        <Box key={r.id} sx={{
-          position: "absolute",
-          left: r.x, top: r.y,
-          width: 8, height: 8,
-          marginLeft: -1, marginTop: -1,
-          borderRadius: "50%",
-          background: `${base}66`,
-          animation: "ripple 0.6s ease-out forwards",
-          pointerEvents: "none",
-        }} />
-      ))}
-      {icon && <Box component="span" sx={{ fontSize: "0.9rem", lineHeight: 1 }}>{icon}</Box>}
-      {children}
-    </Box>
-  );
-}
-
-/* ─── Part Attach Flash Overlay ─── */
-function AttachFlash({ trigger }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!trigger) return;
-    setVisible(true);
-    const t = setTimeout(() => setVisible(false), 700);
-    return () => clearTimeout(t);
-  }, [trigger]);
-
-  if (!visible) return null;
-  return (
-    <Box sx={{
-      position: "absolute", inset: 0, zIndex: 10,
-      pointerEvents: "none",
-      borderRadius: "16px",
-      background: "radial-gradient(ellipse at center, rgba(0,242,254,0.18) 0%, transparent 70%)",
-      border: "2px solid rgba(0,242,254,0.5)",
-      animation: "attachFlash 0.7s ease forwards",
-    }}>
-      <Typography sx={{
-        position: "absolute", top: "50%", left: "50%",
-        transform: "translate(-50%,-50%)",
-        color: "#00f2fe", fontWeight: 800, fontSize: "0.85rem",
-        letterSpacing: "2px", textShadow: "0 0 12px #00f2fe",
-        animation: "attachFlash 0.7s ease forwards",
-      }}>
-        PART ATTACHED
-      </Typography>
-    </Box>
-  );
-}
-
-/* ─── Scan Line decoration ─── */
-function ScanLine() {
-  return (
-    <Box sx={{
-      position: "absolute", top: 0, left: 0, right: 0,
-      height: "2px",
-      background: "linear-gradient(90deg, transparent, rgba(0,242,254,0.6), transparent)",
-      animation: "scanLine 3s linear infinite",
-      pointerEvents: "none",
-      zIndex: 5,
-    }} />
-  );
-}
-
-/* ─── Corner brackets ─── */
-function CornerBrackets() {
-  const style = (pos) => ({
-    position: "absolute", width: 16, height: 16,
-    pointerEvents: "none", zIndex: 4,
-    ...pos,
-  });
-  const borderBase = "2px solid rgba(0,242,254,0.5)";
-  return (
-    <>
-      <Box sx={{ ...style({ top: 16, left: 16 }), borderTop: borderBase, borderLeft: borderBase }} />
-      <Box sx={{ ...style({ top: 16, right: 16 }), borderTop: borderBase, borderRight: borderBase }} />
-      <Box sx={{ ...style({ bottom: 16, left: 16 }), borderBottom: borderBase, borderLeft: borderBase }} />
-      <Box sx={{ ...style({ bottom: 16, right: 16 }), borderBottom: borderBase, borderRight: borderBase }} />
-    </>
-  );
-}
+import {
+  HudStyleInjector,
+  GlowButton,
+  SaveStatusPill,
+  ScanLine,
+  CornerBrackets,
+  AttachFlash,
+} from "@/components/hud";
 
 /* ══════════════════════════════════════════════════════ MAIN PAGE */
 export default function CustomizePage() {
@@ -419,7 +202,7 @@ export default function CustomizePage() {
 
   return (
     <>
-      <StyleInjector />
+      <HudStyleInjector />
 
       {/* ══ PAGE ROOT — full-screen showroom ══ */}
       <Box sx={{
